@@ -18,7 +18,32 @@
 
 (setq DIRE "C:\\S\\PLANTILLAS AUTOCAD\\yazaki")
 
-(setq DCL (load_dialog (strcat DIRE "\\yazaki.dcl")))
+(setq DCL nil)
+
+(defun yzk-load-dcl ( / dcl-path dcl-id)
+  (setq dcl-path (findfile (strcat DIRE "\\yazaki.dcl")))
+  (if (not dcl-path)
+    (setq dcl-path (findfile "yazaki.dcl"))
+  )
+  (if (not dcl-path)
+    (progn
+      (alert (strcat "No se encontro el archivo DCL en: "
+                     (strcat DIRE "\\yazaki.dcl")
+                     " o en la ruta de busqueda."))
+      nil
+    )
+    (progn
+      (setq dcl-id (load_dialog dcl-path))
+      (if (< dcl-id 0)
+        (progn
+          (alert (strcat "No se pudo cargar el DCL: " dcl-path))
+          nil
+        )
+        dcl-id
+      )
+    )
+  )
+)
 
 
 (if (not (tblsearch "LAYER" "YZK_ESTRUTURA"))
@@ -334,7 +359,7 @@
 		  )
 		)
 	)
-  (if FITS
+  (if QUAD
     (command "_.draworder" QUAD "" "_Back")
     (princ)
     )
@@ -490,43 +515,59 @@
   (setq LISTA3 (load (strcat DIRE "\\config\\acabamentos3.txt")))
   (setq LISTA4 (load (strcat DIRE "\\config\\acabamentos4.txt"))) 
 
-  (setq DCL (load_dialog (strcat DIRE "\\yazaki.dcl")))
-  (new_dialog "acabamentos" DCL)
-
-  (action_tile "lacab"  "(troca_cor1)")
-  (action_tile "lacab2" "(troca_cor2)")
-  (action_tile "lacab3" "(troca_cor3)")
-  (action_tile "lacab4" "(troca_cor4)")
-
-
-  (action_tile "accept" "(done_dialog 1)")
-  (action_tile "cancel" "(done_dialog 0)")
-
-  (start_list "lacab1")
-(foreach EL LISTA1 (add_list (last EL)))
-(end_list)
-
-(start_list "lacab2")
-(foreach EL LISTA2 (add_list (last EL)))
-(end_list)
-
-(start_list "lacab3")
-(foreach EL LISTA3 (add_list (last EL)))
-(end_list)
-
-(start_list "lacab4")
-(foreach EL LISTA4 (add_list (last EL)))
-(end_list)
-
-
-  (setq RET (start_dialog))
-  (unload_dialog DCL)
-
-  (if (= RET 1)
+  (setq DCL (yzk-load-dcl))
+  (if (not DCL)
     (progn
-      (setq LINHAS (ssget '((0 . "LINE"))))
-      (if LINHAS
-        (command "_.change" LINHAS "" "p" "c" "truecolor" COLORA "la" "YZK_ESTRUTURA" "")
+      (if (numberp OLDSNAP)
+        (setvar "osmode" OLDSNAP)
+      )
+      (princ)
+    )
+  )
+  (if DCL
+    (progn
+      (if (not (new_dialog "acabamentos" DCL))
+        (progn
+          (alert "No se pudo abrir el dialogo 'acabamentos'.")
+          (unload_dialog DCL)
+        )
+        (progn
+          (action_tile "lacab1" "(troca_cor1)")
+          (action_tile "lacab2" "(troca_cor2)")
+          (action_tile "lacab3" "(troca_cor3)")
+          (action_tile "lacab4" "(troca_cor4)")
+
+          (action_tile "accept" "(done_dialog 1)")
+          (action_tile "cancel" "(done_dialog 0)")
+
+          (start_list "lacab1")
+          (foreach EL LISTA1 (add_list (last EL)))
+          (end_list)
+
+          (start_list "lacab2")
+          (foreach EL LISTA2 (add_list (last EL)))
+          (end_list)
+
+          (start_list "lacab3")
+          (foreach EL LISTA3 (add_list (last EL)))
+          (end_list)
+
+          (start_list "lacab4")
+          (foreach EL LISTA4 (add_list (last EL)))
+          (end_list)
+
+          (setq RET (start_dialog))
+          (unload_dialog DCL)
+
+          (if (= RET 1)
+            (progn
+              (setq LINHAS (ssget '((0 . "LINE"))))
+              (if LINHAS
+                (command "_.change" LINHAS "" "p" "c" "truecolor" COLORA "la" "YZK_ESTRUTURA" "")
+              )
+            )
+          )
+        )
       )
     )
   )
