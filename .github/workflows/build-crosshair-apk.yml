@@ -33,7 +33,7 @@ jobs:
 
       - name: Decode and unpack v5 project
         run: |
-          cat v5chunk*.txt | base64 -d > crosshair-source-v5.zip
+          cat v5small*.txt | base64 -d > crosshair-source-v5.zip
           unzip -q crosshair-source-v5.zip
 
       - name: Build debug APK v5
