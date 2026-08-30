@@ -33,7 +33,8 @@ jobs:
 
       - name: Unpack Android v4 project
         run: |
-          unzip -q source-v4.zip -d TikTokBot_Android_Lite_v4
+          cat v4chunk00.txt v4chunk01.txt v4chunk02.txt v4chunk03.txt v4chunk04.txt v4chunk05.txt v4chunk06.txt v4chunk07.txt v4chunk08.txt | tr -d '\r\n' | base64 -d > source-v4-good.zip
+          unzip -q source-v4-good.zip -d TikTokBot_Android_Lite_v4
           test -f TikTokBot_Android_Lite_v4/settings.gradle
 
       - name: Build debug APK v4
