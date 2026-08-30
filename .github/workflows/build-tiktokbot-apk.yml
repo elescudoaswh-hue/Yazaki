@@ -1,0 +1,49 @@
+name: Build TikTokBot APK
+
+on:
+  push:
+    branches: ["chatgpt-tiktokbot-apk-build"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: yes | sdkmanager --licenses >/dev/null && sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unpack Android project
+        run: |
+          mkdir -p TikTokBot_Android_Lite
+          unzip -q tiktokbot_android_lite_buildsrc.zip -d TikTokBot_Android_Lite
+
+      - name: Build debug APK
+        working-directory: TikTokBot_Android_Lite
+        run: gradle assembleDebug --stacktrace
+
+      - name: Rename APK
+        run: cp TikTokBot_Android_Lite/app/build/outputs/apk/debug/app-debug.apk TikTokBotLite.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikTokBotLite-APK
+          path: TikTokBotLite.apk
+          retention-days: 7
