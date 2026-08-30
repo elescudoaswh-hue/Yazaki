@@ -36,16 +36,50 @@ jobs:
           cat v5small*.txt | base64 -d > crosshair-source-v5.zip
           unzip -q crosshair-source-v5.zip
 
-      - name: Build debug APK v5
+      - name: Patch project to v6 battery temperature
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          base = Path('CODMCrosshair_Auto')
+
+          p = base / 'app/build.gradle'
+          s = p.read_text()
+          s = s.replace('versionCode 5', 'versionCode 6').replace("versionName '5.0'", "versionName '6.0'")
+          p.write_text(s)
+
+          p = base / 'app/src/main/java/com/codm/crosshair/MainActivity.java'
+          s = p.read_text()
+          s = s.replace('private CheckBox batteryEnabled;\n    private CheckBox fpsEnabled;', 'private CheckBox batteryEnabled;\n    private CheckBox temperatureEnabled;\n    private CheckBox fpsEnabled;')
+          s = s.replace('if (!prefs.getBoolean("v5_migrated", false)) {\n            prefs.edit()\n                    .putFloat("scale", prefs.getFloat("scale", 0.40f))\n                    .putBoolean("stats_enabled", true)\n                    .putBoolean("battery_enabled", true)\n                    .putBoolean("fps_enabled", true)\n                    .putBoolean("v5_migrated", true)\n                    .apply();\n        }', 'if (!prefs.getBoolean("v6_migrated", false)) {\n            prefs.edit()\n                    .putFloat("scale", prefs.getFloat("scale", 0.40f))\n                    .putBoolean("stats_enabled", true)\n                    .putBoolean("battery_enabled", true)\n                    .putBoolean("temperature_enabled", true)\n                    .putBoolean("fps_enabled", true)\n                    .putBoolean("v6_migrated", true)\n                    .apply();\n        }')
+          s = s.replace('TextView title = text("CODM CROSSHAIR AUTO • v5", 25);', 'TextView title = text("CODM CROSSHAIR AUTO • v6", 25);')
+          s = s.replace('TextView info = text("Crosshair ECO + botón en Ajustes rápidos + batería + FPS con Shizuku. El FPS solo se consulta mientras COD Mobile está abierto.", 15);', 'TextView info = text("Crosshair ECO + botón en Ajustes rápidos + batería + temperatura de batería + FPS con Shizuku. Los datos solo se consultan mientras COD Mobile está abierto.", 15);')
+          s = s.replace('statsEnabled.setText("Mostrar panel BATERÍA / FPS dentro de CODM");', 'statsEnabled.setText("Mostrar panel BATERÍA / TEMP / FPS dentro de CODM");')
+          s = s.replace('        batteryEnabled = new CheckBox(this);\n        batteryEnabled.setText("Mostrar porcentaje de batería");\n        batteryEnabled.setTextColor(Color.WHITE);\n        batteryEnabled.setChecked(prefs.getBoolean("battery_enabled", true));\n        root.addView(batteryEnabled);\n\n        fpsEnabled = new CheckBox(this);', '        batteryEnabled = new CheckBox(this);\n        batteryEnabled.setText("Mostrar porcentaje de batería");\n        batteryEnabled.setTextColor(Color.WHITE);\n        batteryEnabled.setChecked(prefs.getBoolean("battery_enabled", true));\n        root.addView(batteryEnabled);\n\n        temperatureEnabled = new CheckBox(this);\n        temperatureEnabled.setText("Mostrar temperatura de batería (°C)");\n        temperatureEnabled.setTextColor(Color.WHITE);\n        temperatureEnabled.setChecked(prefs.getBoolean("temperature_enabled", true));\n        root.addView(temperatureEnabled);\n\n        fpsEnabled = new CheckBox(this);')
+          s = s.replace('int battery = prefs.getInt("last_battery", -1);\n            diagnostic.setText("Último paquete: " + last + "\\nÚltimo CODM: " + codm + "\\nVentana activa: " + active + "\\nOverlay: " + overlay + "\\nFPS: " + (fps >= 0 ? fps : "—") + "   Batería: " + (battery >= 0 ? battery + "%" : "—"));', 'int battery = prefs.getInt("last_battery", -1);\n            int temp10 = prefs.getInt("last_battery_temp_tenths", -1);\n            String temp = temp10 >= 0 ? String.format(Locale.US, "%.1f°C", temp10 / 10f) : "—";\n            diagnostic.setText("Último paquete: " + last + "\\nÚltimo CODM: " + codm + "\\nVentana activa: " + active + "\\nOverlay: " + overlay + "\\nFPS: " + (fps >= 0 ? fps : "—") + "   Batería: " + (battery >= 0 ? battery + "%" : "—") + "   Temp batería: " + temp);')
+          s = s.replace('.putBoolean("battery_enabled", batteryEnabled.isChecked())\n                .putBoolean("fps_enabled", fpsEnabled.isChecked())', '.putBoolean("battery_enabled", batteryEnabled.isChecked())\n                .putBoolean("temperature_enabled", temperatureEnabled.isChecked())\n                .putBoolean("fps_enabled", fpsEnabled.isChecked())')
+          s = s.replace('batteryEnabled.setChecked(prefs.getBoolean("battery_enabled", true));\n        fpsEnabled.setChecked', 'batteryEnabled.setChecked(prefs.getBoolean("battery_enabled", true));\n        temperatureEnabled.setChecked(prefs.getBoolean("temperature_enabled", true));\n        fpsEnabled.setChecked')
+          p.write_text(s)
+
+          p = base / 'app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java'
+          s = p.read_text()
+          s = s.replace('statsView.setText("BAT —%   •   FPS —");', 'statsView.setText("BAT —%   •   TEMP —°C   •   FPS —");')
+          s = s.replace('        int battery = -1;\n        try {\n            BatteryManager bm = (BatteryManager) getSystemService(BATTERY_SERVICE);\n            if (bm != null) battery = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);\n        } catch (Throwable ignored) { }\n\n        int fps = -1;', '        int battery = -1;\n        int batteryTempTenths = -1;\n        try {\n            BatteryManager bm = (BatteryManager) getSystemService(BATTERY_SERVICE);\n            if (bm != null) battery = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);\n            Intent batteryIntent = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));\n            if (batteryIntent != null) {\n                batteryTempTenths = batteryIntent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);\n            }\n        } catch (Throwable ignored) { }\n\n        int fps = -1;')
+          s = s.replace('final int b = battery;\n        final int f = fps;', 'final int b = battery;\n        final int t10 = batteryTempTenths;\n        final int f = fps;')
+          s = s.replace('            if (prefs.getBoolean("battery_enabled", true)) {\n                s.append("BAT ").append(b >= 0 ? b : "—").append(\'%\');\n            }\n            if (fpsEnabled) {', '            if (prefs.getBoolean("battery_enabled", true)) {\n                s.append("BAT ").append(b >= 0 ? b : "—").append(\'%\');\n            }\n            if (prefs.getBoolean("temperature_enabled", true)) {\n                if (s.length() > 0) s.append("   •   ");\n                s.append("TEMP ");\n                if (t10 >= 0) s.append(String.format(java.util.Locale.US, "%.1f°C", t10 / 10f));\n                else s.append("—°C");\n            }\n            if (fpsEnabled) {')
+          s = s.replace('prefs.edit().putInt("last_fps", f).putInt("last_battery", b).apply();', 'prefs.edit().putInt("last_fps", f).putInt("last_battery", b).putInt("last_battery_temp_tenths", t10).apply();')
+          p.write_text(s)
+          PY
+
+      - name: Build debug APK v6
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v5
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v5_Shizuku.apk
+      - name: Rename APK v6
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v6_Temp_Shizuku.apk
 
-      - name: Upload APK v5
+      - name: Upload APK v6
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v5-Shizuku-APK
-          path: CODMCrosshair_Auto_v5_Shizuku.apk
+          name: CODMCrosshair-Auto-v6-Temp-Shizuku-APK
+          path: CODMCrosshair_Auto_v6_Temp_Shizuku.apk
           retention-days: 7
