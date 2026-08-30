@@ -31,22 +31,22 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Unpack Android project
+      - name: Unpack Android v2 project
         run: |
-          cat b64chunk00.txt b64chunk01.txt b64chunk02.txt b64chunk03.txt b64chunk04.txt b64chunk05.txt b64chunk06.txt b64chunk07.txt | tr -d '\r\n' | base64 -d > source.zip
-          unzip -q source.zip -d TikTokBot_Android_Lite
-          test -f TikTokBot_Android_Lite/settings.gradle
+          cat v2chunk00.txt v2chunk01.txt v2chunk02.txt v2chunk03.txt v2chunk04.txt v2chunk05.txt v2chunk06.txt v2chunk07.txt v2chunk08.txt | tr -d '\r\n' | base64 -d > source-v2.zip
+          unzip -q source-v2.zip -d TikTokBot_Android_Lite_v2
+          test -f TikTokBot_Android_Lite_v2/settings.gradle
 
-      - name: Build debug APK
-        working-directory: TikTokBot_Android_Lite
+      - name: Build debug APK v2
+        working-directory: TikTokBot_Android_Lite_v2
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK
-        run: cp TikTokBot_Android_Lite/app/build/outputs/apk/debug/app-debug.apk TikTokBotLite.apk
+      - name: Rename APK v2
+        run: cp TikTokBot_Android_Lite_v2/app/build/outputs/apk/debug/app-debug.apk TikTokBotLite_v2.apk
 
-      - name: Upload APK
+      - name: Upload APK v2
         uses: actions/upload-artifact@v4
         with:
-          name: TikTokBotLite-APK
-          path: TikTokBotLite.apk
+          name: TikTokBotLite-v2-APK
+          path: TikTokBotLite_v2.apk
           retention-days: 7
