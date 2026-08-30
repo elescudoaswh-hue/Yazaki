@@ -31,21 +31,21 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Decode and unpack v4 ECO project
+      - name: Decode and unpack v5 project
         run: |
-          base64 -d crosshair-source-v4.b64 > crosshair-source-v4.zip
-          unzip -q crosshair-source-v4.zip
+          cat v5chunk*.txt | base64 -d > crosshair-source-v5.zip
+          unzip -q crosshair-source-v5.zip
 
-      - name: Build debug APK v4 ECO
+      - name: Build debug APK v5
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v4 ECO
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v4_ECO.apk
+      - name: Rename APK v5
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v5_Shizuku.apk
 
-      - name: Upload APK v4 ECO
+      - name: Upload APK v5
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v4-ECO-APK
-          path: CODMCrosshair_Auto_v4_ECO.apk
+          name: CODMCrosshair-Auto-v5-Shizuku-APK
+          path: CODMCrosshair_Auto_v5_Shizuku.apk
           retention-days: 7
