@@ -70,16 +70,71 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Build debug APK v6
+      - name: Patch project to v7 vertical adjustable panel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          base = Path('CODMCrosshair_Auto')
+
+          p = base / 'app/build.gradle'
+          s = p.read_text().replace('versionCode 6', 'versionCode 7').replace("versionName '6.0'", "versionName '7.0'")
+          p.write_text(s)
+
+          p = base / 'app/src/main/java/com/codm/crosshair/MainActivity.java'
+          s = p.read_text()
+          s = s.replace('private TextView sizeLabel;\n    private TextView xLabel;', 'private TextView sizeLabel;\n    private TextView statsSizeLabel;\n    private TextView xLabel;')
+          s = s.replace('private SeekBar sizeSeek;\n    private SeekBar xSeek;', 'private SeekBar sizeSeek;\n    private SeekBar statsSizeSeek;\n    private SeekBar xSeek;')
+          s = s.replace('if (!prefs.getBoolean("v6_migrated", false)) {', 'if (!prefs.getBoolean("v7_migrated", false)) {')
+          s = s.replace('.putBoolean("fps_enabled", true)\n                    .putBoolean("v6_migrated", true)', '.putBoolean("fps_enabled", true)\n                    .putFloat("stats_scale", prefs.getFloat("stats_scale", 1.00f))\n                    .putBoolean("v7_migrated", true)')
+          s = s.replace('CODM CROSSHAIR AUTO • v6', 'CODM CROSSHAIR AUTO • v7')
+          s = s.replace('Crosshair ECO + botón en Ajustes rápidos + batería + temperatura de batería + FPS con Shizuku. Los datos solo se consultan mientras COD Mobile está abierto.', 'Crosshair ECO + panel vertical de batería, temperatura y FPS con tamaño ajustable. Los datos solo se consultan mientras COD Mobile está abierto.')
+          old = '        fpsEnabled.setChecked(prefs.getBoolean("fps_enabled", true));\n        root.addView(fpsEnabled);\n\n        shizukuStatus = text("Shizuku: comprobando…", 14);'
+          new = '        fpsEnabled.setChecked(prefs.getBoolean("fps_enabled", true));\n        root.addView(fpsEnabled);\n\n        float statsScale = prefs.getFloat("stats_scale", 1.00f);\n        statsSizeLabel = text(String.format(Locale.US, "Tamaño del panel: %.2fx", statsScale), 16);\n        root.addView(statsSizeLabel);\n        statsSizeSeek = new SeekBar(this);\n        statsSizeSeek.setMax(150);\n        statsSizeSeek.setProgress(Math.round((statsScale - 0.50f) * 100f));\n        root.addView(statsSizeSeek);\n\n        shizukuStatus = text("Shizuku: comprobando…", 14);'
+          assert old in s
+          s = s.replace(old, new)
+          old = '        sizeSeek.setOnSeekBarChangeListener(new SimpleSeek() {\n            @Override public void changed(SeekBar seekBar, int progress) {\n                float v = 0.20f + progress / 100f;\n                sizeLabel.setText(String.format(Locale.US, "Tamaño: %.2fx", v));\n                preview.setScaleFactor(v);\n            }\n        });\n        xSeek.setOnSeekBarChangeListener'
+          new = '        sizeSeek.setOnSeekBarChangeListener(new SimpleSeek() {\n            @Override public void changed(SeekBar seekBar, int progress) {\n                float v = 0.20f + progress / 100f;\n                sizeLabel.setText(String.format(Locale.US, "Tamaño: %.2fx", v));\n                preview.setScaleFactor(v);\n            }\n        });\n        statsSizeSeek.setOnSeekBarChangeListener(new SimpleSeek() {\n            @Override public void changed(SeekBar seekBar, int progress) {\n                float v = 0.50f + progress / 100f;\n                statsSizeLabel.setText(String.format(Locale.US, "Tamaño del panel: %.2fx", v));\n            }\n        });\n        xSeek.setOnSeekBarChangeListener'
+          assert old in s
+          s = s.replace(old, new)
+          old = '.putBoolean("temperature_enabled", temperatureEnabled.isChecked())\n                .putBoolean("fps_enabled", fpsEnabled.isChecked())'
+          new = '.putBoolean("temperature_enabled", temperatureEnabled.isChecked())\n                .putBoolean("fps_enabled", fpsEnabled.isChecked())\n                .putFloat("stats_scale", 0.50f + statsSizeSeek.getProgress() / 100f)'
+          assert old in s
+          s = s.replace(old, new)
+          old = 'temperatureEnabled.setChecked(prefs.getBoolean("temperature_enabled", true));\n        fpsEnabled.setChecked(prefs.getBoolean("fps_enabled", true));'
+          new = 'temperatureEnabled.setChecked(prefs.getBoolean("temperature_enabled", true));\n        fpsEnabled.setChecked(prefs.getBoolean("fps_enabled", true));\n        if (statsSizeSeek != null) statsSizeSeek.setProgress(Math.round((prefs.getFloat("stats_scale", 1.00f) - 0.50f) * 100f));'
+          assert old in s
+          s = s.replace(old, new)
+          p.write_text(s)
+
+          p = base / 'app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java'
+          s = p.read_text()
+          s = s.replace('statsView.setText("BAT —%   •   TEMP —°C   •   FPS —");', 'statsView.setText("Batería: —%\\nTemperatura: —°C\\nFPS del juego: —");')
+          s = s.replace('statsView.setTextSize(12f);', 'statsView.setTextSize(12f * prefs.getFloat("stats_scale", 1.00f));')
+          old = '            if (prefs.getBoolean("stats_enabled", true)) {\n                createStatsOverlayIfEnabled();\n                startStatsSampling();\n            } else {'
+          new = '            if (prefs.getBoolean("stats_enabled", true)) {\n                createStatsOverlayIfEnabled();\n                updateStatsAppearance();\n                startStatsSampling();\n            } else {'
+          assert old in s
+          s = s.replace(old, new)
+          old = '        try {\n            windowManager.addView(statsView, statsParams);\n        } catch (Throwable e) {\n            statsView = null;\n            statsParams = null;\n        }\n    }\n\n    private synchronized void startStatsSampling()'
+          new = '        try {\n            windowManager.addView(statsView, statsParams);\n            updateStatsAppearance();\n        } catch (Throwable e) {\n            statsView = null;\n            statsParams = null;\n        }\n    }\n\n    private void updateStatsAppearance() {\n        if (statsView == null || prefs == null) return;\n        float panelScale = Math.max(0.50f, Math.min(2.00f, prefs.getFloat("stats_scale", 1.00f)));\n        float density = getResources().getDisplayMetrics().density;\n        statsView.setTextSize(12f * panelScale);\n        statsView.setPadding(Math.round(8 * density * panelScale), Math.round(4 * density * panelScale), Math.round(8 * density * panelScale), Math.round(4 * density * panelScale));\n    }\n\n    private synchronized void startStatsSampling()'
+          assert old in s
+          s = s.replace(old, new)
+          old = '            StringBuilder s = new StringBuilder();\n            if (prefs.getBoolean("battery_enabled", true)) {\n                s.append("BAT ").append(b >= 0 ? b : "—").append(\'%\');\n            }\n            if (prefs.getBoolean("temperature_enabled", true)) {\n                if (s.length() > 0) s.append("   •   ");\n                s.append("TEMP ");\n                if (t10 >= 0) s.append(String.format(java.util.Locale.US, "%.1f°C", t10 / 10f));\n                else s.append("—°C");\n            }\n            if (fpsEnabled) {\n                if (s.length() > 0) s.append("   •   ");\n                s.append("FPS ").append(f >= 0 ? f : "—");\n            }\n            statsView.setText(s.length() == 0 ? "" : s.toString());'
+          new = '            StringBuilder s = new StringBuilder();\n            if (prefs.getBoolean("battery_enabled", true)) {\n                s.append("Batería: ").append(b >= 0 ? b : "—").append(\'%\');\n            }\n            if (prefs.getBoolean("temperature_enabled", true)) {\n                if (s.length() > 0) s.append(\'\\n\');\n                s.append("Temperatura: ");\n                if (t10 >= 0) s.append(String.format(java.util.Locale.US, "%.1f °C", t10 / 10f));\n                else s.append("— °C");\n            }\n            if (fpsEnabled) {\n                if (s.length() > 0) s.append(\'\\n\');\n                s.append("FPS del juego: ").append(f >= 0 ? f : "—");\n            }\n            updateStatsAppearance();\n            statsView.setText(s.length() == 0 ? "" : s.toString());'
+          assert old in s
+          s = s.replace(old, new)
+          p.write_text(s)
+          PY
+
+      - name: Build debug APK v7
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v6
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v6_Temp_Shizuku.apk
+      - name: Rename APK v7
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v7_PanelVertical.apk
 
-      - name: Upload APK v6
+      - name: Upload APK v7
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v6-Temp-Shizuku-APK
-          path: CODMCrosshair_Auto_v6_Temp_Shizuku.apk
+          name: CODMCrosshair-Auto-v7-PanelVertical-APK
+          path: CODMCrosshair_Auto_v7_PanelVertical.apk
           retention-days: 7
