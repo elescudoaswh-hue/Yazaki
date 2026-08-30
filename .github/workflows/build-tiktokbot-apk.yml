@@ -22,7 +22,9 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK 35
-        run: yes | sdkmanager --licenses >/dev/null && sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -31,8 +33,9 @@ jobs:
 
       - name: Unpack Android project
         run: |
-          mkdir -p TikTokBot_Android_Lite
-          unzip -q tiktokbot_android_lite_buildsrc.zip -d TikTokBot_Android_Lite
+          base64 -d tiktokbot_android_lite_buildsrc.b64 > source.zip
+          unzip -q source.zip -d TikTokBot_Android_Lite
+          test -f TikTokBot_Android_Lite/settings.gradle
 
       - name: Build debug APK
         working-directory: TikTokBot_Android_Lite
