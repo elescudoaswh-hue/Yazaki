@@ -33,7 +33,7 @@ jobs:
 
       - name: Unpack Android project
         run: |
-          base64 -d tiktokbot_android_lite_buildsrc.b64 > source.zip
+          cat b64chunk00.txt b64chunk01.txt b64chunk02.txt b64chunk03.txt b64chunk04.txt b64chunk05.txt b64chunk06.txt b64chunk07.txt | tr -d '\r\n' | base64 -d > source.zip
           unzip -q source.zip -d TikTokBot_Android_Lite
           test -f TikTokBot_Android_Lite/settings.gradle
 
