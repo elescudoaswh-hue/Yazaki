@@ -31,22 +31,21 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Unpack Android v3 project
+      - name: Unpack Android v4 project
         run: |
-          cat v3c00.txt v3c01.txt v3c02.txt v3c03.txt v3c04.txt v3c05.txt v3c06.txt v3c07.txt | tr -d '\r\n' | base64 -d > source-v3.zip
-          unzip -q source-v3.zip -d TikTokBot_Android_Lite_v3
-          test -f TikTokBot_Android_Lite_v3/settings.gradle
+          unzip -q source-v4.zip -d TikTokBot_Android_Lite_v4
+          test -f TikTokBot_Android_Lite_v4/settings.gradle
 
-      - name: Build debug APK v3
-        working-directory: TikTokBot_Android_Lite_v3
+      - name: Build debug APK v4
+        working-directory: TikTokBot_Android_Lite_v4
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v3
-        run: cp TikTokBot_Android_Lite_v3/app/build/outputs/apk/debug/app-debug.apk TikTokBotLite_v3.apk
+      - name: Rename APK v4
+        run: cp TikTokBot_Android_Lite_v4/app/build/outputs/apk/debug/app-debug.apk TikTokBotLite_v4.apk
 
-      - name: Upload APK v3
+      - name: Upload APK v4
         uses: actions/upload-artifact@v4
         with:
-          name: TikTokBotLite-v3-APK
-          path: TikTokBotLite_v3.apk
+          name: TikTokBotLite-v4-APK
+          path: TikTokBotLite_v4.apk
           retention-days: 7
