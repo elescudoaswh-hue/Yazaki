@@ -1,0 +1,221 @@
+diff --git a/CODMCrosshair_Auto/app/build.gradle b/CODMCrosshair_Auto/app/build.gradle
+index 0a2547d..3970c6c 100644
+--- a/CODMCrosshair_Auto/app/build.gradle
++++ b/CODMCrosshair_Auto/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'com.codm.crosshair'
+         minSdk 26
+         targetSdk 35
+-        versionCode 12
+-        versionName '12.0'
++        versionCode 13
++        versionName '13.0'
+     }
+ 
+     buildTypes {
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+index 3caf4f1..bf2205f 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+@@ -435,8 +435,10 @@ public class CodmAccessibilityService extends AccessibilityService {
+             statsView.setText(s.length() == 0 ? "" : s.toString());
+             String fpsStatus = fpsClient != null ? fpsClient.getLastStatus() : "Cliente FPS no disponible";
+             String fpsLayer = fpsClient != null ? fpsClient.getLastLayer() : "";
++            String fpsDiagnostic = fpsClient != null ? fpsClient.getDiagnosticSummary() : "Cliente FPS no disponible";
+             prefs.edit().putInt("last_fps", f).putInt("last_battery", b).putInt("last_battery_temp_tenths", t10)
+-                    .putString("fps_status", fpsStatus).putString("fps_layer", fpsLayer).apply();
++                    .putString("fps_status", fpsStatus).putString("fps_layer", fpsLayer)
++                    .putString("fps_diagnostic", fpsDiagnostic).apply();
+         });
+     }
+ 
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+index 8cbc660..29e38b8 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
+         root.addView(test);
+ 
+         Button refresh = new Button(this);
+-        refresh.setText("ACTUALIZAR ESTADO / DIAGNÓSTICO");
++        refresh.setText("ACTUALIZAR ESTADO / DIAGNÓSTICO FPS v13");
+         root.addView(refresh);
+ 
+         TextView diagnostic = text("Diagnóstico: —", 13);
+@@ -290,10 +290,11 @@ public class MainActivity extends Activity {
+             String temp = temp10 >= 0 ? String.format(Locale.US, "%.1f°C", temp10 / 10f) : "—";
+             String fpsStatus = prefs.getString("fps_status", "—");
+             String fpsLayer = prefs.getString("fps_layer", "—");
++            String fpsDiagnostic = prefs.getString("fps_diagnostic", "—");
+             boolean panelLocked = prefs.getBoolean("stats_locked", true);
+             int panelX = prefs.getInt("stats_x_dp", -1);
+             int panelY = prefs.getInt("stats_y_dp", -1);
+-            diagnostic.setText("Último paquete: " + last + "\nÚltimo CODM: " + codm + "\nVentana activa: " + active + "\nOverlay: " + overlay + "\nPanel: " + (panelLocked ? "BLOQUEADO • touch-through" : "MOVER") + "   Pos: " + (panelX >= 0 ? panelX + "," + panelY : "predeterminada") + "\nFPS: " + (fps >= 0 ? fps : "—") + "   Batería: " + (battery >= 0 ? battery + "%" : "—") + "   Temp batería: " + temp + "\nEstado FPS: " + fpsStatus + "\nCapa FPS: " + fpsLayer);
++            diagnostic.setText("Último paquete: " + last + "\nÚltimo CODM: " + codm + "\nVentana activa: " + active + "\nOverlay: " + overlay + "\nPanel: " + (panelLocked ? "BLOQUEADO • touch-through" : "MOVER") + "   Pos: " + (panelX >= 0 ? panelX + "," + panelY : "predeterminada") + "\nFPS: " + (fps >= 0 ? fps : "—") + "   Batería: " + (battery >= 0 ? battery + "%" : "—") + "   Temp batería: " + temp + "\nEstado FPS: " + fpsStatus + "\nCapa FPS: " + fpsLayer + "\n\nDIAGNÓSTICO FPS v13:\n" + fpsDiagnostic);
+         });
+         shizuku.setOnClickListener(v -> requestShizukuPermission());
+         tile.setOnClickListener(v -> addQuickSettingsTile());
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+index 298112c..bad7223 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+@@ -38,6 +38,16 @@ public class ShizukuFpsClient {
+     private long lastPageFlipCount = -1L;
+     private long lastPageFlipAtMs = 0L;
+ 
++    // v13 diagnostic snapshots. These are intentionally compact so they can be
++    // persisted in SharedPreferences and shown after leaving the game.
++    private volatile String diagIdentity = "id=—";
++    private volatile String diagPageFlip = "1013=—";
++    private volatile String diagKernel = "kernel=—";
++    private volatile String diagLatency = "latency=—";
++    private volatile String diagTimeStats = "timestats=—";
++    private volatile String diagLayers = "layers=—";
++    private volatile String diagGfx = "gfx=—";
++
+     private final ServiceConnection connection = new ServiceConnection() {
+         @Override public void onServiceConnected(ComponentName name, IBinder service) {
+             shell = IFpsShell.Stub.asInterface(service);
+@@ -69,6 +79,11 @@ public class ShizukuFpsClient {
+     public String getLastStatus() { return lastStatus; }
+     public String getLastLayer() { return lastLayer; }
+ 
++    public String getDiagnosticSummary() {
++        return diagIdentity + "\n" + diagPageFlip + "\n" + diagKernel + "\n"
++                + diagLatency + "\n" + diagTimeStats + "\n" + diagLayers + "\n" + diagGfx;
++    }
++
+     public synchronized void connect() {
+         if (shell != null || binding) return;
+         if (!isShizukuReady()) {
+@@ -81,8 +96,8 @@ public class ShizukuFpsClient {
+             args = new Shizuku.UserServiceArgs(new ComponentName(context, FpsShellService.class))
+                     .daemon(false)
+                     .processNameSuffix("fps_shell")
+-                    .tag("codm_fps_shell_v12")
+-                    .version(12);
++                    .tag("codm_fps_shell_v13")
++                    .version(13);
+             Shizuku.bindUserService(args, connection);
+         } catch (Throwable e) {
+             binding = false;
+@@ -145,6 +160,9 @@ public class ShizukuFpsClient {
+             return -1;
+         }
+ 
++        if (shellIdentity == null || shellIdentity.isEmpty()) shellIdentity = exec("id").trim();
++        diagIdentity = "id=" + compact(shellIdentity, 92);
++
+         // v12: prioridad al contador global de page flips de SurfaceFlinger.
+         // SysFloat incluye este método y AOSP/Skia lo usa para medir FPS:
+         // se toman dos contadores separados en el tiempo y se calcula delta/segundos.
+@@ -157,7 +175,9 @@ public class ShizukuFpsClient {
+         if (kernelFps > 0) return kernelFps;
+ 
+         // Algunas ROMs permiten --latency global aunque oculten los nombres de capa.
+-        int globalLatencyFps = parseSurfaceFlingerFps(exec("dumpsys SurfaceFlinger --latency"));
++        String globalLatencyRaw = exec("dumpsys SurfaceFlinger --latency");
++        int globalLatencyFps = parseSurfaceFlingerFps(globalLatencyRaw);
++        diagLatency = "latency=" + outputSummary(globalLatencyRaw) + " fps=" + globalLatencyFps;
+         if (globalLatencyFps > 0) {
+             lastStatus = "FPS OK • SurfaceFlinger global" + shellSuffix();
+             lastLayer = "display/global";
+@@ -177,6 +197,8 @@ public class ShizukuFpsClient {
+         if (timeStatsEnabled && now - timeStatsStartedAt >= 1600L) {
+             timeDump = exec("dumpsys SurfaceFlinger --timestats -dump");
+             TimeStatsResult ts = parseTimeStats(timeDump, safePkg);
++            diagTimeStats = "timestats=" + outputSummary(timeDump)
++                    + " codm=" + (containsCodm(timeDump, safePkg) ? "sí" : "no") + " fps=" + ts.fps;
+ 
+             // Preparar inmediatamente la próxima ventana de medición.
+             String restart = exec("dumpsys SurfaceFlinger --timestats -clear -enable");
+@@ -215,6 +237,8 @@ public class ShizukuFpsClient {
+ 
+         String list = exec("dumpsys SurfaceFlinger --list");
+         List<String> candidates = candidateLayers(list, safePkg);
++        diagLayers = "layers=" + outputSummary(list) + " codm=" + (containsCodm(list, safePkg) ? "sí" : "no")
++                + " candidatos=" + candidates.size();
+         int bestFps = -1;
+         String bestLayer = "";
+         int tried = 0;
+@@ -237,7 +261,9 @@ public class ShizukuFpsClient {
+         }
+ 
+         // 3) Último respaldo para ROMs que exponen FrameCompleted por gfxinfo.
+-        int gfx = parseGfxInfoFps(exec("dumpsys gfxinfo " + safePkg + " framestats"));
++        String gfxRaw = exec("dumpsys gfxinfo " + safePkg + " framestats");
++        int gfx = parseGfxInfoFps(gfxRaw);
++        diagGfx = "gfx=" + outputSummary(gfxRaw) + " fps=" + gfx;
+         if (gfx > 0) {
+             lastStatus = "FPS OK • gfxinfo" + shellSuffix();
+             lastLayer = "gfxinfo";
+@@ -254,6 +280,7 @@ public class ShizukuFpsClient {
+     private int readPageFlipFps() {
+         String out = exec("service call SurfaceFlinger 1013");
+         long count = parsePageFlipCount(out);
++        diagPageFlip = "1013=" + outputSummary(out) + " count=" + count;
+         long now = android.os.SystemClock.elapsedRealtime();
+         if (count < 0L) {
+             // No borramos el valor previo por un fallo transitorio; así una siguiente
+@@ -307,7 +334,9 @@ public class ShizukuFpsClient {
+         String cached;
+         synchronized (this) { cached = cachedFpsPath; }
+         if (cached != null && !cached.isEmpty()) {
+-            int fps = parseKernelFps(exec("cat " + shellQuote(cached)));
++            String cachedRaw = exec("cat " + shellQuote(cached));
++            int fps = parseKernelFps(cachedRaw);
++            diagKernel = "kernel=cached " + shortLayer(cached) + " " + outputSummary(cachedRaw) + " fps=" + fps;
+             if (fps > 0) {
+                 lastStatus = "FPS OK • measured_fps" + shellSuffix();
+                 lastLayer = shortLayer(cached);
+@@ -326,7 +355,9 @@ public class ShizukuFpsClient {
+                 + "/proc/fps_tm/fps_count; do "
+                 + "[ -r \"$p\" ] && printf '%s|' \"$p\" && cat \"$p\" 2>/dev/null && printf '\\n'; "
+                 + "done";
+-        KernelFpsResult known = parseKernelFpsLines(exec(cmd));
++        String knownRaw = exec(cmd);
++        KernelFpsResult known = parseKernelFpsLines(knownRaw);
++        diagKernel = "kernel=known " + outputSummary(knownRaw) + " fps=" + known.fps;
+         if (known.fps > 0) {
+             synchronized (this) { cachedFpsPath = known.path; }
+             lastStatus = "FPS OK • contador kernel" + shellSuffix();
+@@ -343,7 +374,9 @@ public class ShizukuFpsClient {
+             if (paths != null && !paths.trim().isEmpty()) {
+                 StringBuilder read = new StringBuilder("while IFS= read -r p; do [ -r \"$p\" ] && printf '%s|' \"$p\" && cat \"$p\" 2>/dev/null && printf '\\n'; done <<'EOF'\n");
+                 read.append(paths.trim()).append("\nEOF");
+-                KernelFpsResult found = parseKernelFpsLines(exec(read.toString()));
++                String discoveredRaw = exec(read.toString());
++                KernelFpsResult found = parseKernelFpsLines(discoveredRaw);
++                diagKernel = "kernel=discover " + outputSummary(discoveredRaw) + " fps=" + found.fps;
+                 if (found.fps > 0) {
+                     synchronized (this) { cachedFpsPath = found.path; }
+                     lastStatus = "FPS OK • sysfs detectado" + shellSuffix();
+@@ -405,6 +438,28 @@ public class ShizukuFpsClient {
+         lastStatus = "TimeStats iniciado • capturando" + shellSuffix();
+     }
+ 
++    private static String outputSummary(String s) {
++        if (s == null || s.trim().isEmpty()) return "VACÍO";
++        String low = s.toLowerCase(Locale.ROOT);
++        if (low.contains("permission denied") || low.contains("not permitted") || low.contains("securityexception")) {
++            return "DENEGADO:" + compact(s, 88);
++        }
++        if (low.contains("unknown transaction") || low.contains("unknown option") || low.contains("not found")) {
++            return "NO-SOPORTADO:" + compact(s, 88);
++        }
++        int lines = 0;
++        for (String line : s.split("\r?\n")) if (line != null && !line.trim().isEmpty()) lines++;
++        return "OK chars=" + s.length() + " lines=" + lines + " raw=" + compact(s, 88);
++    }
++
++    private static String compact(String s, int max) {
++        if (s == null) return "—";
++        String t = s.replace('\r', ' ').replace('\n', ' ').replaceAll("\\s+", " ").trim();
++        if (t.isEmpty()) return "VACÍO";
++        if (t.length() > max) return t.substring(0, Math.max(1, max - 1)) + "…";
++        return t;
++    }
++
+     private static boolean looksLikeError(String s) {
+         if (s == null || s.trim().isEmpty()) return false;
+         String l = s.toLowerCase(Locale.ROOT);
