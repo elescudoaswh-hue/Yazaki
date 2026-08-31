@@ -57,9 +57,47 @@ jobs:
       - name: Apply v14
         run: patch -p1 < v14_shizuku_fix.patch
 
-      - name: Apply v15 provider fix
+      - name: Apply v15 provider and status fix
         run: |
-          patch -p1 < v15_shizuku_provider_fix.patch
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path('CODMCrosshair_Auto/app/build.gradle')
+          s = gradle.read_text()
+          s = s.replace("versionCode 14", "versionCode 15")
+          s = s.replace("versionName '14.0'", "versionName '15.0'")
+          gradle.write_text(s)
+
+          manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          if 'rikka.shizuku.ShizukuProvider' not in s:
+              provider = '''        <provider
+              android:name="rikka.shizuku.ShizukuProvider"
+              android:authorities="${applicationId}.shizuku"
+              android:multiprocess="false"
+              android:enabled="true"
+              android:exported="true"
+              android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+          '''
+              marker = '        <service\n'
+              if marker not in s:
+                  raise SystemExit('No se encontro punto de insercion para ShizukuProvider')
+              s = s.replace(marker, provider + marker, 1)
+          manifest.write_text(s)
+
+          main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
+          s = main.read_text()
+          s = s.replace('CODM CROSSHAIR AUTO • v14', 'CODM CROSSHAIR AUTO • v15')
+          s = s.replace('Shizuku: esperando conexión con el servicio…', 'SHIZUKU: DESCONECTADO • binder no recibido')
+          s = s.replace('Shizuku: esperando binder • si ya está iniciado, se conectará solo', 'SHIZUKU: DESCONECTADO')
+          s = s.replace('Shizuku: CONECTADO • lectura FPS habilitada', 'SHIZUKU: CONECTADO • FPS HABILITADO')
+          s = s.replace('Shizuku: activo • falta autorizar esta APK', 'SHIZUKU: DESCONECTADO • FALTA PERMISO')
+          s = s.replace('Shizuku: no detectado', 'SHIZUKU: DESCONECTADO')
+          s = s.replace('Color.rgb(255, 190, 80)', 'Color.rgb(255, 80, 80)')
+          main.write_text(s)
+          PY
+
           grep -q "versionCode 15" CODMCrosshair_Auto/app/build.gradle
           grep -q "rikka.shizuku.ShizukuProvider" CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
           grep -q "SHIZUKU: CONECTADO" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
