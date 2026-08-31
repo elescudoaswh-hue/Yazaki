@@ -4,7 +4,7 @@ on:
   push:
     branches: ["chatgpt-tiktok-live-overlay"]
     paths:
-      - 'overlayv4_patch.b64'
+      - 'overlayv4_patch*.txt'
       - '.github/workflows/build-tiktok-overlay-v4.yml'
   workflow_dispatch:
 
@@ -60,7 +60,7 @@ jobs:
 
       - name: Apply v4 editor + RTMP patch
         run: |
-          base64 -d overlayv4_patch.b64 | gzip -d > overlay_v4.patch
+          cat overlayv4_patch*.txt | base64 -d | gzip -d > overlay_v4.patch
           echo "27d6a4e5a7a8b828bdfd0b47d7f58005854e99df69d3728608583e16e79401c6  overlay_v4.patch" | sha256sum -c -
           cd project
           patch -p2 < ../overlay_v4.patch
