@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v11 APK
+name: Build CODM Crosshair v12 APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v11:
+  build-v12:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,21 +51,25 @@ jobs:
         run: |
           base64 -d v11patch.b64 | gzip -d > v11.patch
           patch -p1 < v11.patch
-          grep -q "versionCode 11" CODMCrosshair_Auto/app/build.gradle
-          grep -q "measured_fps" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q "fps_tm/fps_count" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q "find /sys -type f" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
 
-      - name: Build debug APK v11
+      - name: Apply v12 page-flip FPS patch
+        run: |
+          base64 -d v12patch.b64 | gzip -d > v12.patch
+          patch -p1 < v12.patch
+          grep -q "versionCode 12" CODMCrosshair_Auto/app/build.gradle
+          grep -q "service call SurfaceFlinger 1013" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+          grep -q "parsePageFlipCount" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+
+      - name: Build debug APK v12
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v11
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v11_KernelFPS.apk
+      - name: Rename APK v12
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v12_PageFlipFPS.apk
 
-      - name: Upload APK v11
+      - name: Upload APK v12
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v11-KernelFPS-APK
-          path: CODMCrosshair_Auto_v11_KernelFPS.apk
+          name: CODMCrosshair-Auto-v12-PageFlipFPS-APK
+          path: CODMCrosshair_Auto_v12_PageFlipFPS.apk
           retention-days: 7
