@@ -1,0 +1,42 @@
+name: Export TikTok Overlay v2 Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["chatgpt-tiktok-live-overlay"]
+    paths:
+      - '.github/workflows/export-tiktok-overlay-v2-source.yml'
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct v1 source
+        run: |
+          cat b64chunk*.txt | base64 -d > TikTokBotBase.zip
+          mkdir -p project
+          unzip -q TikTokBotBase.zip -d project
+          cat overlayv1_patch*.txt | base64 -d | gzip -d > overlay_v1.patch
+          cd project
+          patch -p4 < ../overlay_v1.patch
+          cd ..
+          base64 -d overlayv1_fix.b64 | gzip -d > overlay_v1_fix.patch
+          cd project
+          patch -p1 < ../overlay_v1_fix.patch
+          cd ..
+      - name: Apply v2
+        run: |
+          cat overlayv2_patch*.txt | base64 -d | gzip -d > overlay_v2.patch
+          cd project
+          patch -p4 < ../overlay_v2.patch || true
+          grep -q 'versionCode 2' app/build.gradle
+          grep -q 'ACTION_TOGGLE_CHAT' app/src/main/java/com/tiktokbot/lite/LiveService.java
+      - name: Zip source
+        run: zip -qr TikTokLiveOverlay_v2_source.zip project
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikTokLiveOverlay-v2-source
+          path: TikTokLiveOverlay_v2_source.zip
+          retention-days: 2
