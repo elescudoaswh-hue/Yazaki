@@ -1,0 +1,163 @@
+diff --git a/CODMCrosshair_Auto/app/build.gradle b/CODMCrosshair_Auto/app/build.gradle
+index 0a2547d..e2bd816 100644
+--- a/CODMCrosshair_Auto/app/build.gradle
++++ b/CODMCrosshair_Auto/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'com.codm.crosshair'
+         minSdk 26
+         targetSdk 35
+-        versionCode 12
+-        versionName '12.0'
++        versionCode 14
++        versionName '14.0'
+     }
+ 
+     buildTypes {
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+index 3caf4f1..67bf756 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+@@ -519,6 +519,10 @@ public class CodmAccessibilityService extends AccessibilityService {
+         if (commandReceiver != null) {
+             try { unregisterReceiver(commandReceiver); } catch (Exception ignored) { }
+         }
++        if (fpsClient != null) {
++            fpsClient.release();
++            fpsClient = null;
++        }
+         if (prefs != null) prefs.edit().putBoolean("service_connected", false).apply();
+         super.onDestroy();
+     }
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+index 8cbc660..af4cfe6 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+@@ -51,6 +51,22 @@ public class MainActivity extends Activity {
+         if (requestCode == SHIZUKU_REQ) runOnUiThread(this::updateShizukuStatus);
+     };
+ 
++    // HyperOS/Android 16 puede entregar el binder de Shizuku unos instantes después
++    // de abrir la Activity. No debemos decidir que Shizuku está apagado solo por
++    // una lectura temprana de pingBinder(). Escuchamos el binder de forma reactiva.
++    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener = () ->
++            runOnUiThread(() -> {
++                updateShizukuStatus();
++                try {
++                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
++                        sendBroadcast(new Intent(CodmAccessibilityService.ACTION_UPDATE).setPackage(getPackageName()));
++                    }
++                } catch (Throwable ignored) { }
++            });
++
++    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener = () ->
++            runOnUiThread(this::updateShizukuStatus);
++
+     private int dp(float v) {
+         return Math.round(v * getResources().getDisplayMetrics().density);
+     }
+@@ -82,6 +98,8 @@ public class MainActivity extends Activity {
+         }
+ 
+         try { Shizuku.addRequestPermissionResultListener(shizukuPermissionListener); } catch (Throwable ignored) { }
++        try { Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener); } catch (Throwable ignored) { }
++        try { Shizuku.addBinderDeadListener(shizukuBinderDeadListener); } catch (Throwable ignored) { }
+ 
+         ScrollView scroll = new ScrollView(this);
+         scroll.setBackgroundColor(Color.rgb(14, 14, 14));
+@@ -92,7 +110,7 @@ public class MainActivity extends Activity {
+         scroll.addView(root, new ScrollView.LayoutParams(
+                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+ 
+-        TextView title = text("CODM CROSSHAIR AUTO • v9", 25);
++        TextView title = text("CODM CROSSHAIR AUTO • v14", 25);
+         title.setTextColor(CrosshairView.GREEN);
+         title.setGravity(Gravity.CENTER_HORIZONTAL);
+         root.addView(title);
+@@ -313,7 +331,7 @@ public class MainActivity extends Activity {
+     private void requestShizukuPermission() {
+         try {
+             if (!Shizuku.pingBinder()) {
+-                shizukuStatus.setText("Shizuku: NO INICIADO • abre Shizuku y pulsa Iniciar");
++                shizukuStatus.setText("Shizuku: esperando conexión con el servicio…");
+                 shizukuStatus.setTextColor(Color.rgb(255, 190, 80));
+                 return;
+             }
+@@ -331,7 +349,7 @@ public class MainActivity extends Activity {
+     private void updateShizukuStatus() {
+         try {
+             if (!Shizuku.pingBinder()) {
+-                shizukuStatus.setText("Shizuku: instalado pero servicio no iniciado");
++                shizukuStatus.setText("Shizuku: esperando binder • si ya está iniciado, se conectará solo");
+                 shizukuStatus.setTextColor(Color.rgb(255, 190, 80));
+             } else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                 shizukuStatus.setText("Shizuku: CONECTADO • lectura FPS habilitada");
+@@ -428,6 +446,8 @@ public class MainActivity extends Activity {
+     @Override
+     protected void onDestroy() {
+         try { Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener); } catch (Throwable ignored) { }
++        try { Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener); } catch (Throwable ignored) { }
++        try { Shizuku.removeBinderDeadListener(shizukuBinderDeadListener); } catch (Throwable ignored) { }
+         super.onDestroy();
+     }
+ 
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+index 298112c..f90ab6d 100644
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+@@ -37,6 +37,8 @@ public class ShizukuFpsClient {
+     private boolean sysfsDiscoveryDone = false;
+     private long lastPageFlipCount = -1L;
+     private long lastPageFlipAtMs = 0L;
++    private final Shizuku.OnBinderReceivedListener binderReceivedListener;
++    private final Shizuku.OnBinderDeadListener binderDeadListener;
+ 
+     private final ServiceConnection connection = new ServiceConnection() {
+         @Override public void onServiceConnected(ComponentName name, IBinder service) {
+@@ -56,6 +58,23 @@ public class ShizukuFpsClient {
+     public ShizukuFpsClient(Context context, ReadyListener listener) {
+         this.context = context.getApplicationContext();
+         this.listener = listener;
++
++        binderReceivedListener = () -> {
++            boolean ready = isShizukuReady();
++            lastStatus = ready ? "Shizuku binder recibido • permiso OK" : "Shizuku binder recibido • falta permiso";
++            if (this.listener != null) this.listener.onReadyChanged(ready);
++        };
++        binderDeadListener = () -> {
++            synchronized (ShizukuFpsClient.this) {
++                shell = null;
++                binding = false;
++                lastStatus = "Shizuku binder desconectado";
++            }
++            if (this.listener != null) this.listener.onReadyChanged(false);
++        };
++
++        try { Shizuku.addBinderReceivedListenerSticky(binderReceivedListener); } catch (Throwable ignored) { }
++        try { Shizuku.addBinderDeadListener(binderDeadListener); } catch (Throwable ignored) { }
+     }
+ 
+     public boolean isShizukuReady() {
+@@ -81,8 +100,8 @@ public class ShizukuFpsClient {
+             args = new Shizuku.UserServiceArgs(new ComponentName(context, FpsShellService.class))
+                     .daemon(false)
+                     .processNameSuffix("fps_shell")
+-                    .tag("codm_fps_shell_v12")
+-                    .version(12);
++                    .tag("codm_fps_shell_v14")
++                    .version(14);
+             Shizuku.bindUserService(args, connection);
+         } catch (Throwable e) {
+             binding = false;
+@@ -119,6 +138,12 @@ public class ShizukuFpsClient {
+         if (listener != null) listener.onReadyChanged(false);
+     }
+ 
++    public synchronized void release() {
++        disconnect();
++        try { Shizuku.removeBinderReceivedListener(binderReceivedListener); } catch (Throwable ignored) { }
++        try { Shizuku.removeBinderDeadListener(binderDeadListener); } catch (Throwable ignored) { }
++    }
++
+     public synchronized boolean isConnected() { return shell != null; }
+ 
+     private synchronized String exec(String cmd) {
