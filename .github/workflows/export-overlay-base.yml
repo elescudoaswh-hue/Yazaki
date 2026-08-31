@@ -1,0 +1,23 @@
+name: Export TikTok Overlay Base
+
+on:
+  push:
+    branches: ["chatgpt-tiktok-live-overlay"]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct Android source
+        run: |
+          cat b64chunk*.txt | base64 -d > TikTokBotBase.zip
+          mkdir -p exported
+          unzip -q TikTokBotBase.zip -d exported
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikTokOverlay-Base-Source
+          path: exported
+          retention-days: 7
