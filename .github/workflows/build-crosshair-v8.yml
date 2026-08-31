@@ -33,7 +33,7 @@ jobs:
 
       - name: Decode and verify v8 source
         run: |
-          cat v8c*.txt | base64 -d > CODMCrosshair_Auto_v8_source.zip
+          cat v8small*.txt | base64 -d > CODMCrosshair_Auto_v8_source.zip
           echo "7b15f38ad087954b9bd46adfd0da6af7a0b9f9ecfc2d05bb495ca38a31cd2ace  CODMCrosshair_Auto_v8_source.zip" | sha256sum -c -
           unzip -t CODMCrosshair_Auto_v8_source.zip
           unzip -q CODMCrosshair_Auto_v8_source.zip
