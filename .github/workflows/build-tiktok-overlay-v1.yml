@@ -64,7 +64,7 @@ jobs:
         run: |
           cp project/app/build/outputs/apk/debug/app-debug.apk TikTokLiveOverlay_v1.apk
           unzip -t TikTokLiveOverlay_v1.apk >/dev/null
-          aapt dump badging TikTokLiveOverlay_v1.apk | grep "package: name='com.tiktokoverlay.live'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging TikTokLiveOverlay_v1.apk | grep "package: name='com.tiktokoverlay.live'"
           ls -lh TikTokLiveOverlay_v1.apk
 
       - name: Upload APK
