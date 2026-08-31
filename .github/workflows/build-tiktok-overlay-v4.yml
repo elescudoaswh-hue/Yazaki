@@ -64,8 +64,9 @@ jobs:
           echo "27d6a4e5a7a8b828bdfd0b47d7f58005854e99df69d3728608583e16e79401c6  overlay_v4.patch" | sha256sum -c -
           cd project
           patch -p2 < ../overlay_v4.patch
+          sed -i "s/RootEncoder:library:2.8.0/RootEncoder:library:2.5.9/" app/build.gradle
           grep -q 'versionCode 4' app/build.gradle
-          grep -q 'RootEncoder:library:2.8.0' app/build.gradle
+          grep -q 'RootEncoder:library:2.5.9' app/build.gradle
           grep -q 'ACTION_START_RTMP' app/src/main/java/com/tiktokbot/lite/SceneCaptureService.java
           grep -q 'INICIAR LIVE RTMP' app/src/main/java/com/tiktokbot/lite/SceneEditorActivity.java
 
