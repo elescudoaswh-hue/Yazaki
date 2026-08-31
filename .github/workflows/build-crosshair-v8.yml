@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v10 APK
+name: Build CODM Crosshair v11 APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v10:
+  build-v11:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,27 +41,31 @@ jobs:
         run: |
           base64 -d v9patch.b64 | gzip -d > v9.patch
           patch -p1 < v9.patch
-          grep -q "versionCode 9" CODMCrosshair_Auto/app/build.gradle
-          grep -q "PanelMoveTileService" CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
-      - name: Apply v10 FPS patch
+      - name: Apply v10 TimeStats patch
         run: |
           base64 -d v10patch.b64 | gzip -d > v10.patch
           patch -p1 < v10.patch
-          grep -q "versionCode 10" CODMCrosshair_Auto/app/build.gradle
-          grep -q "timestats -dump" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q "TimeStats Android" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
 
-      - name: Build debug APK v10
+      - name: Apply v11 kernel FPS patch
+        run: |
+          base64 -d v11patch.b64 | gzip -d > v11.patch
+          patch -p1 < v11.patch
+          grep -q "versionCode 11" CODMCrosshair_Auto/app/build.gradle
+          grep -q "measured_fps" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+          grep -q "fps_tm/fps_count" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+          grep -q "find /sys -type f" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+
+      - name: Build debug APK v11
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v10
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v10_FPS_TimeStats.apk
+      - name: Rename APK v11
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v11_KernelFPS.apk
 
-      - name: Upload APK v10
+      - name: Upload APK v11
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v10-FPS-TimeStats-APK
-          path: CODMCrosshair_Auto_v10_FPS_TimeStats.apk
+          name: CODMCrosshair-Auto-v11-KernelFPS-APK
+          path: CODMCrosshair_Auto_v11_KernelFPS.apk
           retention-days: 7
