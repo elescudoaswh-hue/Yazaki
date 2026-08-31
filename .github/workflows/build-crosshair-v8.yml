@@ -54,8 +54,7 @@ jobs:
 
       - name: Apply v12 page-flip FPS patch
         run: |
-          base64 -d v12patch.b64 | gzip -d > v12.patch
-          patch -p1 < v12.patch
+          patch -p1 < v12_fixed.patch
           grep -q "versionCode 12" CODMCrosshair_Auto/app/build.gradle
           grep -q "service call SurfaceFlinger 1013" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
           grep -q "parsePageFlipCount" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
