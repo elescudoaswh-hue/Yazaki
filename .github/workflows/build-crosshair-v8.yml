@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v8 APK
+name: Build CODM Crosshair v9 APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v8:
+  build-v9:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,23 +31,30 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Decode and verify v8 source
+      - name: Decode v8 base
         run: |
           cat v8small*.txt | base64 -d > CODMCrosshair_Auto_v8_source.zip
           echo "7b15f38ad087954b9bd46adfd0da6af7a0b9f9ecfc2d05bb495ca38a31cd2ace  CODMCrosshair_Auto_v8_source.zip" | sha256sum -c -
-          unzip -t CODMCrosshair_Auto_v8_source.zip
           unzip -q CODMCrosshair_Auto_v8_source.zip
 
-      - name: Build debug APK v8
+      - name: Apply v9 patch
+        run: |
+          base64 -d v9patch.b64 | gzip -d > v9.patch
+          patch -p1 < v9.patch
+          grep -q "versionCode 9" CODMCrosshair_Auto/app/build.gradle
+          grep -q "PanelMoveTileService" CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+          grep -q "timestats" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+
+      - name: Build debug APK v9
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
-      - name: Rename APK v8
-        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v8_FPSFix.apk
+      - name: Rename APK v9
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v9_MoverPanel_FPS.apk
 
-      - name: Upload APK v8
+      - name: Upload APK v9
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v8-FPSFix-APK
-          path: CODMCrosshair_Auto_v8_FPSFix.apk
+          name: CODMCrosshair-Auto-v9-MoverPanel-FPS-APK
+          path: CODMCrosshair_Auto_v9_MoverPanel_FPS.apk
           retention-days: 7
