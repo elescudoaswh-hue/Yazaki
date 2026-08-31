@@ -1,0 +1,85 @@
+name: Build TikTok Live Overlay v3 Scene Editor APK
+
+on:
+  push:
+    branches: ["chatgpt-tiktok-live-overlay"]
+    paths:
+      - 'overlayv3_patch.b64'
+      - '.github/workflows/build-tiktok-overlay-v3.yml'
+  workflow_dispatch:
+
+jobs:
+  build-overlay-v3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Reconstruct v2 source
+        run: |
+          cat b64chunk*.txt | base64 -d > TikTokBotBase.zip
+          mkdir -p project
+          unzip -q TikTokBotBase.zip -d project
+          cat overlayv1_patch*.txt | base64 -d | gzip -d > overlay_v1.patch
+          cd project
+          patch -p4 < ../overlay_v1.patch
+          cd ..
+          base64 -d overlayv1_fix.b64 | gzip -d > overlay_v1_fix.patch
+          cd project
+          patch -p1 < ../overlay_v1_fix.patch
+          cd ..
+          cat overlayv2_patch*.txt | base64 -d | gzip -d > overlay_v2.patch
+          cd project
+          patch -p4 < ../overlay_v2.patch || true
+          grep -q 'versionCode 2' app/build.gradle
+          grep -q 'ACTION_TOGGLE_CHAT' app/src/main/java/com/tiktokbot/lite/LiveService.java
+          cd ..
+
+      - name: Apply v3 scene editor patch
+        run: |
+          base64 -d overlayv3_patch.b64 | gzip -d > overlay_v3.patch
+          echo "1091020888333dc5388ea3f02da2e263b8b1831850f506a70fe0a9594ef38ed4  overlay_v3.patch" | sha256sum -c -
+          cd project
+          patch -p2 < ../overlay_v3.patch
+          grep -q 'versionCode 3' app/build.gradle
+          grep -q 'SceneEditorActivity' app/src/main/AndroidManifest.xml
+          grep -q 'FOREGROUND_SERVICE_MEDIA_PROJECTION' app/src/main/AndroidManifest.xml
+          grep -q 'CAPTURAR COD MOBILE' app/src/main/java/com/tiktokbot/lite/SceneEditorActivity.java
+
+      - name: Build debug APK
+        working-directory: project
+        run: gradle assembleDebug --stacktrace
+
+      - name: Verify and rename APK
+        run: |
+          cp project/app/build/outputs/apk/debug/app-debug.apk TikTokLiveOverlay_v3_EditorEscena.apk
+          unzip -t TikTokLiveOverlay_v3_EditorEscena.apk >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging TikTokLiveOverlay_v3_EditorEscena.apk | grep "package: name='com.tiktokoverlay.live'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree TikTokLiveOverlay_v3_EditorEscena.apk AndroidManifest.xml | grep -q 'SceneCaptureService'
+          ls -lh TikTokLiveOverlay_v3_EditorEscena.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikTokLiveOverlay-v3-EditorEscena-APK
+          path: TikTokLiveOverlay_v3_EditorEscena.apk
+          retention-days: 7
