@@ -1,0 +1,74 @@
+diff --git a/CODMCrosshair_Auto/app/build.gradle b/CODMCrosshair_Auto/app/build.gradle
+--- a/CODMCrosshair_Auto/app/build.gradle
++++ b/CODMCrosshair_Auto/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'com.codm.crosshair'
+         minSdk 26
+         targetSdk 35
+-        versionCode 14
+-        versionName '14.0'
++        versionCode 15
++        versionName '15.0'
+     }
+ 
+     buildTypes {
+diff --git a/CODMCrosshair_Auto/app/src/main/AndroidManifest.xml b/CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+--- a/CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
++++ b/CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+@@ -13,6 +13,15 @@
+                 <category android:name="android.intent.category.LAUNCHER" />
+             </intent-filter>
+         </activity>
++
++        <provider
++            android:name="rikka.shizuku.ShizukuProvider"
++            android:authorities="${applicationId}.shizuku"
++            android:multiprocess="false"
++            android:enabled="true"
++            android:exported="true"
++            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+ 
+         <service
+             android:name=".CodmAccessibilityService"
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+@@ -110,7 +110,7 @@ public class MainActivity extends Activity {
+-        TextView title = text("CODM CROSSHAIR AUTO • v14", 25);
++        TextView title = text("CODM CROSSHAIR AUTO • v15", 25);
+         title.setTextColor(CrosshairView.GREEN);
+         title.setGravity(Gravity.CENTER_HORIZONTAL);
+         root.addView(title);
+@@ -331,8 +331,8 @@ public class MainActivity extends Activity {
+         try {
+             if (!Shizuku.pingBinder()) {
+-                shizukuStatus.setText("Shizuku: esperando conexión con el servicio…");
+-                shizukuStatus.setTextColor(Color.rgb(255, 190, 80));
++                shizukuStatus.setText("SHIZUKU: DESCONECTADO • binder no recibido");
++                shizukuStatus.setTextColor(Color.rgb(255, 80, 80));
+                 return;
+             }
+@@ -349,15 +349,15 @@ public class MainActivity extends Activity {
+     private void updateShizukuStatus() {
+         try {
+             if (!Shizuku.pingBinder()) {
+-                shizukuStatus.setText("Shizuku: esperando binder • si ya está iniciado, se conectará solo");
+-                shizukuStatus.setTextColor(Color.rgb(255, 190, 80));
++                shizukuStatus.setText("SHIZUKU: DESCONECTADO");
++                shizukuStatus.setTextColor(Color.rgb(255, 80, 80));
+             } else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+-                shizukuStatus.setText("Shizuku: CONECTADO • lectura FPS habilitada");
++                shizukuStatus.setText("SHIZUKU: CONECTADO • FPS HABILITADO");
+                 shizukuStatus.setTextColor(Color.rgb(110, 210, 90));
+             } else {
+-                shizukuStatus.setText("Shizuku: activo • falta autorizar esta APK");
+-                shizukuStatus.setTextColor(Color.rgb(255, 190, 80));
++                shizukuStatus.setText("SHIZUKU: DESCONECTADO • FALTA PERMISO");
++                shizukuStatus.setTextColor(Color.rgb(255, 80, 80));
+             }
+         } catch (Throwable t) {
+-            shizukuStatus.setText("Shizuku: no detectado");
++            shizukuStatus.setText("SHIZUKU: DESCONECTADO");
+             shizukuStatus.setTextColor(Color.rgb(255, 80, 80));
+         }
+     }
