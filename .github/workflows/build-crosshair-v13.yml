@@ -1,0 +1,77 @@
+name: Build CODM Crosshair v13 Diagnostic APK
+
+on:
+  push:
+    branches: ["chatgpt-codm-crosshair-build"]
+  workflow_dispatch:
+
+jobs:
+  build-v13:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Decode v8 base
+        run: |
+          cat v8small*.txt | base64 -d > CODMCrosshair_Auto_v8_source.zip
+          echo "7b15f38ad087954b9bd46adfd0da6af7a0b9f9ecfc2d05bb495ca38a31cd2ace  CODMCrosshair_Auto_v8_source.zip" | sha256sum -c -
+          unzip -q CODMCrosshair_Auto_v8_source.zip
+
+      - name: Apply v9
+        run: |
+          base64 -d v9patch.b64 | gzip -d > v9.patch
+          patch -p1 < v9.patch
+
+      - name: Apply v10
+        run: |
+          base64 -d v10patch.b64 | gzip -d > v10.patch
+          patch -p1 < v10.patch
+
+      - name: Apply v11
+        run: |
+          base64 -d v11patch.b64 | gzip -d > v11.patch
+          patch -p1 < v11.patch
+
+      - name: Apply v12
+        run: patch -p1 < v12_fixed.patch
+
+      - name: Apply v13 diagnostic
+        run: |
+          patch -p1 < v13_diagnostic.patch
+          grep -q "versionCode 13" CODMCrosshair_Auto/app/build.gradle
+          grep -q "DIAGNÓSTICO FPS v13" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java
+          grep -q "getDiagnosticSummary" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+
+      - name: Build debug APK v13
+        working-directory: CODMCrosshair_Auto
+        run: gradle assembleDebug --stacktrace
+
+      - name: Rename APK v13
+        run: cp CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk CODMCrosshair_Auto_v13_DiagnosticoFPS.apk
+
+      - name: Upload APK v13
+        uses: actions/upload-artifact@v4
+        with:
+          name: CODMCrosshair-Auto-v13-DiagnosticoFPS-APK
+          path: CODMCrosshair_Auto_v13_DiagnosticoFPS.apk
+          retention-days: 7
