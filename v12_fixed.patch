@@ -1,0 +1,134 @@
+diff --git a/CODMCrosshair_Auto/app/build.gradle b/CODMCrosshair_Auto/app/build.gradle
+--- a/CODMCrosshair_Auto/app/build.gradle	2026-08-31 01:15:32.824623431 +0000
++++ b/CODMCrosshair_Auto/app/build.gradle	2026-08-31 01:34:25.004433362 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'com.codm.crosshair'
+         minSdk 26
+         targetSdk 35
+-        versionCode 11
+-        versionName '11.0'
++        versionCode 12
++        versionName '12.0'
+     }
+ 
+     buildTypes {
+diff --git a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+--- a/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java	2026-08-31 01:15:32.824363856 +0000
++++ b/CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java	2026-08-31 01:34:14.720130078 +0000
+@@ -35,6 +35,8 @@
+     private String shellIdentity = "";
+     private String cachedFpsPath = "";
+     private boolean sysfsDiscoveryDone = false;
++    private long lastPageFlipCount = -1L;
++    private long lastPageFlipAtMs = 0L;
+ 
+     private final ServiceConnection connection = new ServiceConnection() {
+         @Override public void onServiceConnected(ComponentName name, IBinder service) {
+@@ -79,8 +81,8 @@
+             args = new Shizuku.UserServiceArgs(new ComponentName(context, FpsShellService.class))
+                     .daemon(false)
+                     .processNameSuffix("fps_shell")
+-                    .tag("codm_fps_shell_v11")
+-                    .version(11);
++                    .tag("codm_fps_shell_v12")
++                    .version(12);
+             Shizuku.bindUserService(args, connection);
+         } catch (Throwable e) {
+             binding = false;
+@@ -111,6 +113,8 @@
+         shellIdentity = "";
+         cachedFpsPath = "";
+         sysfsDiscoveryDone = false;
++        lastPageFlipCount = -1L;
++        lastPageFlipAtMs = 0L;
+         lastStatus = "FPS detenido • modo ECO";
+         if (listener != null) listener.onReadyChanged(false);
+     }
+@@ -141,13 +145,25 @@
+             return -1;
+         }
+ 
+-        // v11: primero usa el mismo tipo de fuente que funciona en monitores
+-        // de sistema como SysFloat: los contadores FPS del kernel/DRM (sysfs).
+-        // Es mucho más directo que inferir FPS desde SurfaceFlinger y en varios
+-        // Xiaomi/POCO Qualcomm expone measured_fps del CRTC activo.
++        // v12: prioridad al contador global de page flips de SurfaceFlinger.
++        // SysFloat incluye este método y AOSP/Skia lo usa para medir FPS:
++        // se toman dos contadores separados en el tiempo y se calcula delta/segundos.
++        // En CODM a pantalla completa representa muy bien los frames presentados.
++        int pageFlipFps = readPageFlipFps();
++        if (pageFlipFps > 0) return pageFlipFps;
++
++        // Respaldo con contadores FPS del kernel/DRM (sysfs).
+         int kernelFps = readKernelFps();
+         if (kernelFps > 0) return kernelFps;
+ 
++        // Algunas ROMs permiten --latency global aunque oculten los nombres de capa.
++        int globalLatencyFps = parseSurfaceFlingerFps(exec("dumpsys SurfaceFlinger --latency"));
++        if (globalLatencyFps > 0) {
++            lastStatus = "FPS OK • SurfaceFlinger global" + shellSuffix();
++            lastLayer = "display/global";
++            return globalLatencyFps;
++        }
++
+         ensureTimeStats();
+         long now = System.currentTimeMillis();
+         String timeDump = "";
+@@ -235,6 +251,57 @@
+         return -1;
+     }
+ 
++    private int readPageFlipFps() {
++        String out = exec("service call SurfaceFlinger 1013");
++        long count = parsePageFlipCount(out);
++        long now = android.os.SystemClock.elapsedRealtime();
++        if (count < 0L) {
++            // No borramos el valor previo por un fallo transitorio; así una siguiente
++            // lectura válida todavía puede calcular el delta.
++            return -1;
++        }
++
++        long previousCount;
++        long previousAt;
++        synchronized (this) {
++            previousCount = lastPageFlipCount;
++            previousAt = lastPageFlipAtMs;
++            lastPageFlipCount = count;
++            lastPageFlipAtMs = now;
++        }
++        if (previousCount < 0L || previousAt <= 0L || now <= previousAt) {
++            lastStatus = "FPS preparando contador SurfaceFlinger" + shellSuffix();
++            lastLayer = "SurfaceFlinger 1013";
++            return -1;
++        }
++
++        long delta;
++        if (count >= previousCount) {
++            delta = count - previousCount;
++        } else {
++            // El contador es int32 y puede hacer wrap.
++            delta = (0x1_0000_0000L - previousCount) + count;
++        }
++        double seconds = (now - previousAt) / 1000.0;
++        if (seconds < 0.35 || seconds > 8.0 || delta <= 0L) return -1;
++        int fps = (int)Math.round(delta / seconds);
++        if (fps >= 1 && fps <= 300) {
++            lastStatus = "FPS OK • page flips SurfaceFlinger" + shellSuffix();
++            lastLayer = "SurfaceFlinger 1013";
++            return fps;
++        }
++        return -1;
++    }
++
++    static long parsePageFlipCount(String data) {
++        if (data == null || data.trim().isEmpty()) return -1L;
++        // Salida habitual: Result: Parcel(00000123 ...)
++        Matcher m = Pattern.compile("(?i)Parcel\\(\\s*([0-9a-f]{1,8})").matcher(data);
++        if (!m.find()) return -1L;
++        try { return Long.parseUnsignedLong(m.group(1), 16) & 0xffffffffL; }
++        catch (Throwable ignored) { return -1L; }
++    }
++
+     private int readKernelFps() {
+         // Si ya encontramos el nodo correcto, una sola lectura es suficiente.
+         String cached;
