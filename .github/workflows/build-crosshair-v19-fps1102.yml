@@ -1,14 +1,15 @@
-name: Build CODM Crosshair v19 FPS Decimal 120
+name: Build CODM Crosshair v20 FPS Exacto
 
 on:
   push:
     branches: ["chatgpt-codm-crosshair-build"]
     paths:
       - '.github/workflows/build-crosshair-v19-fps1102.yml'
+      - 'tools/codm_v20_transform.py'
   workflow_dispatch:
 
 jobs:
-  build-v19:
+  build-v20:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,71 +68,18 @@ jobs:
           patch -p1 < v16.patch
           grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
 
-      - name: Apply v19 decimal FPS hard cap and logo
+      - name: Apply v20 exact FPS transformer and logo
         run: |
           mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
           base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          gradle = Path('CODMCrosshair_Auto/app/build.gradle')
-          s = gradle.read_text().replace('versionCode 16', 'versionCode 19').replace("versionName '16.0'", "versionName '19.0'")
-          gradle.write_text(s)
-
-          manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
-          s = manifest.read_text()
-          def repl(m):
-              attrs = m.group(1)
-              attrs = re.sub(r'\s+android:(?:icon|roundIcon)="[^"]*"', '', attrs)
-              return '<application' + attrs + '\n        android:icon="@drawable/ic_launcher_crosshair"\n        android:roundIcon="@drawable/ic_launcher_crosshair">'
-          s, n = re.subn(r'<application\b([^>]*)>', repl, s, count=1, flags=re.S)
-          if n != 1:
-              raise SystemExit('No se encontró <application>')
-          manifest.write_text(s)
-
-          service = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java')
-          t = service.read_text()
-          t = t.replace('        int fps = -1;', '        float fps = -1f;', 1)
-          t = t.replace('        final int f = fps;', '        final float f = fps;', 1)
-
-          old_ui = '                s.append(f >= 0 ? f : "—").append(" FPS");'
-          new_ui = '                if (f >= 0f) s.append(String.format(java.util.Locale.US, "%.1f", f));\n                else s.append("—");\n                s.append(" FPS");'
-          if old_ui not in t:
-              raise SystemExit('No se encontró salida visual FPS')
-          t = t.replace(old_ui, new_ui, 1)
-
-          old_pref = 'prefs.edit().putInt("last_fps", f).putInt("last_battery", b).putInt("last_battery_temp_tenths", t10)'
-          new_pref = 'prefs.edit().putInt("last_fps", f >= 0f ? Math.round(f) : -1).putFloat("last_fps_exact", f).putInt("last_battery", b).putInt("last_battery_temp_tenths", t10)'
-          if old_pref not in t:
-              raise SystemExit('No se encontró guardado last_fps')
-          t = t.replace(old_pref, new_pref, 1)
-
-          pattern = r'    private int stabilizeFps\(int rawFps\) \{.*?^    \}\n\n    private int currentRefreshRateCap\(\) \{'
-          replacement = '    private float stabilizeFps(int rawFps) {\n        if (rawFps < 1) return -1f;\n        int refreshCap = currentRefreshRateCap();\n        float cap = refreshCap > 0 ? Math.min(120.0f, (float) refreshCap) : 120.0f;\n        float clamped = Math.min((float) rawFps, cap);\n        if (smoothedFps < 0f || Math.abs(clamped - smoothedFps) >= 24f) {\n            smoothedFps = clamped;\n        } else {\n            smoothedFps = (0.68f * clamped) + (0.32f * smoothedFps);\n        }\n        float result = Math.round(smoothedFps * 10f) / 10f;\n        return Math.min(result, 120.0f);\n    }\n\n    private int currentRefreshRateCap() {'
-          t, n = re.subn(pattern, replacement, t, count=1, flags=re.S | re.M)
-          if n != 1:
-              raise SystemExit('No se encontró stabilizeFps/currentRefreshRateCap')
-
-          old_hz = 'if (hz >= 30f && hz <= 360f) return Math.max(1, Math.round(hz));'
-          new_hz = 'if (hz >= 30f && hz <= 360f) return Math.min(120, Math.max(1, Math.round(hz)));'
-          if old_hz not in t:
-              raise SystemExit('No se encontró lectura Hz original')
-          t = t.replace(old_hz, new_hz, 1)
-          service.write_text(t)
-
-          main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
-          mt = main.read_text().replace('CODM CROSSHAIR AUTO • v16', 'CODM CROSSHAIR AUTO • v19')
-          main.write_text(mt)
-          PY
-          test -s CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
-          grep -q 'versionCode 19' CODMCrosshair_Auto/app/build.gradle
-          grep -q 'Math.min(result, 120.0f)' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
-          grep -q '"%.1f"' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
-          grep -q 'last_fps_exact' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          python3 tools/codm_v20_transform.py
+          grep -q 'versionCode 20' CODMCrosshair_Auto/app/build.gradle
+          grep -q 'FPS EXACTO • SurfaceView/BLAST CODM' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+          grep -q 'actualPresentTime' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
+          grep -q 'float stabilizeFps(float rawFps)' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
-      - name: Build v19 APK
+      - name: Build v20 APK
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
@@ -142,11 +90,11 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-icon"
           unzip -l "$APK" | grep -q 'ic_launcher_crosshair.webp'
-          cp "$APK" CODMCrosshair_Auto_v19_FPS_Decimal_120_Logo.apk
+          cp "$APK" CODMCrosshair_Auto_v20_FPS_Exacto_BLAST_Logo.apk
 
-      - name: Upload v19 APK
+      - name: Upload v20 APK
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v19-FPS-Decimal-120-Logo-APK
-          path: CODMCrosshair_Auto_v19_FPS_Decimal_120_Logo.apk
+          name: CODMCrosshair-Auto-v20-FPS-Exacto-BLAST-Logo-APK
+          path: CODMCrosshair_Auto_v20_FPS_Exacto_BLAST_Logo.apk
           retention-days: 7
