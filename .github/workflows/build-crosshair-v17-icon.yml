@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v17 Custom Icon
+name: Build CODM Crosshair v18 FPS 120 Fix
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v17:
+  build-v18:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
           grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
           grep -q "stabilizeFps" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
 
-      - name: Add custom launcher icon and bump v17
+      - name: Add custom launcher icon and fix 120 FPS cap v18
         run: |
           mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
           base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
@@ -79,8 +79,8 @@ jobs:
 
           gradle = Path('CODMCrosshair_Auto/app/build.gradle')
           s = gradle.read_text()
-          s = s.replace('versionCode 16', 'versionCode 17')
-          s = s.replace("versionName '16.0'", "versionName '17.0'")
+          s = s.replace('versionCode 16', 'versionCode 18')
+          s = s.replace("versionName '16.0'", "versionName '18.0'")
           gradle.write_text(s)
 
           manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
@@ -94,15 +94,30 @@ jobs:
               raise SystemExit('No se encontró <application>')
           manifest.write_text(s)
 
+          service = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java')
+          t = service.read_text()
+          old = 'if (hz >= 30f && hz <= 360f) return Math.max(1, Math.round(hz));'
+          new = '''if (hz >= 30f && hz <= 360f) {
+                    int roundedHz = Math.max(1, Math.round(hz));
+                    // HyperOS en este POCO puede reportar ~124-125 Hz aunque el modo real sea 120 Hz.
+                    // Normalizamos ese rango para que el panel nunca supere 120 FPS.
+                    if (roundedHz >= 121 && roundedHz <= 130) return 120;
+                    return roundedHz;
+                }'''
+          if old not in t:
+              raise SystemExit('No se encontró la línea del límite FPS')
+          service.write_text(t.replace(old, new, 1))
+
           main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
-          t = main.read_text().replace('CODM CROSSHAIR AUTO • v16', 'CODM CROSSHAIR AUTO • v17')
+          t = main.read_text().replace('CODM CROSSHAIR AUTO • v16', 'CODM CROSSHAIR AUTO • v18')
           main.write_text(t)
           PY
           test -s CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
-          grep -q 'versionCode 17' CODMCrosshair_Auto/app/build.gradle
+          grep -q 'versionCode 18' CODMCrosshair_Auto/app/build.gradle
+          grep -q 'roundedHz >= 121 && roundedHz <= 130' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
-      - name: Build v17 APK
+      - name: Build v18 APK
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
@@ -112,12 +127,12 @@ jobs:
           unzip -t "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-icon"
-          unzip -l "$APK" | grep -q 'res/drawable-nodpi-v4/ic_launcher_crosshair.webp\|res/drawable-nodpi/ic_launcher_crosshair.webp\|ic_launcher_crosshair.webp'
-          cp "$APK" CODMCrosshair_Auto_v17_IconoVerde.apk
+          unzip -l "$APK" | grep -q 'ic_launcher_crosshair.webp'
+          cp "$APK" CODMCrosshair_Auto_v18_FPS120_Logo.apk
 
-      - name: Upload v17 APK
+      - name: Upload v18 APK
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v17-IconoVerde-APK
-          path: CODMCrosshair_Auto_v17_IconoVerde.apk
+          name: CODMCrosshair-Auto-v18-FPS120-Logo-APK
+          path: CODMCrosshair_Auto_v18_FPS120_Logo.apk
           retention-days: 7
