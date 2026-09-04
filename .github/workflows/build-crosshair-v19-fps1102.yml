@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v19 FPS 110.2
+name: Build CODM Crosshair v19 FPS Decimal 120
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
           manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
           s = manifest.read_text()
           if 'rikka.shizuku.ShizukuProvider' not in s:
-              provider = '''        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />\n\n'''
+              provider = '        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />\n\n'
               s = s.replace('        <service\n', provider + '        <service\n', 1)
           manifest.write_text(s)
           main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
@@ -66,9 +66,8 @@ jobs:
           base64 -d v16patch.b64 | gzip -d > v16.patch
           patch -p1 < v16.patch
           grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
-          grep -q "stabilizeFps" CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
 
-      - name: Apply v19 logo and FPS 110.2 fix
+      - name: Apply v19 decimal FPS hard cap and logo
         run: |
           mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
           base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
@@ -93,14 +92,11 @@ jobs:
 
           service = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java')
           t = service.read_text()
-
           t = t.replace('        int fps = -1;', '        float fps = -1f;', 1)
           t = t.replace('        final int f = fps;', '        final float f = fps;', 1)
 
           old_ui = '                s.append(f >= 0 ? f : "—").append(" FPS");'
-          new_ui = '''                if (f >= 0f) s.append(String.format(java.util.Locale.US, "%.1f", f));
-                else s.append("—");
-                s.append(" FPS");'''
+          new_ui = '                if (f >= 0f) s.append(String.format(java.util.Locale.US, "%.1f", f));\n                else s.append("—");\n                s.append(" FPS");'
           if old_ui not in t:
               raise SystemExit('No se encontró salida visual FPS')
           t = t.replace(old_ui, new_ui, 1)
@@ -111,45 +107,16 @@ jobs:
               raise SystemExit('No se encontró guardado last_fps')
           t = t.replace(old_pref, new_pref, 1)
 
-          old_method = '''    private int stabilizeFps(int rawFps) {
-        if (rawFps < 1) return -1;
-        int cap = currentRefreshRateCap();
-        int clamped = cap > 0 ? Math.min(rawFps, cap) : rawFps;
-        if (smoothedFps < 0f || Math.abs(clamped - smoothedFps) >= 24f) {
-            smoothedFps = clamped;
-        } else {
-            smoothedFps = (0.68f * clamped) + (0.32f * smoothedFps);
-        }
-        int result = Math.round(smoothedFps);
-        return cap > 0 ? Math.min(result, cap) : result;
-    }
-'''
-          new_method = '''    private float stabilizeFps(int rawFps) {
-        if (rawFps < 1) return -1f;
-        // v19: el lector de SurfaceFlinger/Shizuku puede entregar picos falsos >120.
-        // El usuario eligió 110.2 como límite de visualización estable.
-        final float displayCap = 110.2f;
-        float clamped = Math.min((float) rawFps, displayCap);
-        if (smoothedFps < 0f || Math.abs(clamped - smoothedFps) >= 24f) {
-            smoothedFps = clamped;
-        } else {
-            smoothedFps = (0.68f * clamped) + (0.32f * smoothedFps);
-        }
-        if (smoothedFps > displayCap) smoothedFps = displayCap;
-        return Math.round(smoothedFps * 10f) / 10f;
-    }
-'''
-          if old_method not in t:
-              raise SystemExit('No se encontró stabilizeFps original')
-          t = t.replace(old_method, new_method, 1)
+          pattern = r'    private int stabilizeFps\(int rawFps\) \{.*?^    \}\n\n    private int currentRefreshRateCap\(\) \{'
+          replacement = '    private float stabilizeFps(int rawFps) {\n        if (rawFps < 1) return -1f;\n        int refreshCap = currentRefreshRateCap();\n        float cap = refreshCap > 0 ? Math.min(120.0f, (float) refreshCap) : 120.0f;\n        float clamped = Math.min((float) rawFps, cap);\n        if (smoothedFps < 0f || Math.abs(clamped - smoothedFps) >= 24f) {\n            smoothedFps = clamped;\n        } else {\n            smoothedFps = (0.68f * clamped) + (0.32f * smoothedFps);\n        }\n        float result = Math.round(smoothedFps * 10f) / 10f;\n        return Math.min(result, 120.0f);\n    }\n\n    private int currentRefreshRateCap() {'
+          t, n = re.subn(pattern, replacement, t, count=1, flags=re.S | re.M)
+          if n != 1:
+              raise SystemExit('No se encontró stabilizeFps/currentRefreshRateCap')
 
           old_hz = 'if (hz >= 30f && hz <= 360f) return Math.max(1, Math.round(hz));'
-          new_hz = '''if (hz >= 30f && hz <= 360f) {
-                    // Tope físico de diagnóstico independiente de lo que reporte HyperOS.
-                    return Math.min(120, Math.max(1, Math.round(hz)));
-                }'''
+          new_hz = 'if (hz >= 30f && hz <= 360f) return Math.min(120, Math.max(1, Math.round(hz)));'
           if old_hz not in t:
-              raise SystemExit('No se encontró currentRefreshRateCap original')
+              raise SystemExit('No se encontró lectura Hz original')
           t = t.replace(old_hz, new_hz, 1)
           service.write_text(t)
 
@@ -159,8 +126,8 @@ jobs:
           PY
           test -s CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
           grep -q 'versionCode 19' CODMCrosshair_Auto/app/build.gradle
-          grep -q 'displayCap = 110.2f' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
-          grep -q 'Math.min(120' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          grep -q 'Math.min(result, 120.0f)' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          grep -q '"%.1f"' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'last_fps_exact' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
@@ -175,11 +142,11 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-icon"
           unzip -l "$APK" | grep -q 'ic_launcher_crosshair.webp'
-          cp "$APK" CODMCrosshair_Auto_v19_FPS110_2_Logo.apk
+          cp "$APK" CODMCrosshair_Auto_v19_FPS_Decimal_120_Logo.apk
 
       - name: Upload v19 APK
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v19-FPS110-2-Logo-APK
-          path: CODMCrosshair_Auto_v19_FPS110_2_Logo.apk
+          name: CODMCrosshair-Auto-v19-FPS-Decimal-120-Logo-APK
+          path: CODMCrosshair_Auto_v19_FPS_Decimal_120_Logo.apk
           retention-days: 7
