@@ -1,0 +1,170 @@
+name: Build CODM Crosshair v18 FPS Cap Fix
+
+on:
+  push:
+    branches: ["chatgpt-codm-crosshair-build"]
+    paths:
+      - '.github/workflows/build-crosshair-v18-fpscap.yml'
+  workflow_dispatch:
+
+jobs:
+  build-v18:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Reconstruct v16 source
+        run: |
+          cat v8small*.txt | base64 -d > CODMCrosshair_Auto_v8_source.zip
+          unzip -q CODMCrosshair_Auto_v8_source.zip
+          base64 -d v9patch.b64 | gzip -d > v9.patch
+          patch -p1 < v9.patch
+          base64 -d v10patch.b64 | gzip -d > v10.patch
+          patch -p1 < v10.patch
+          base64 -d v11patch.b64 | gzip -d > v11.patch
+          patch -p1 < v11.patch
+          patch -p1 < v12_fixed.patch
+          patch -p1 < v14_shizuku_fix.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('CODMCrosshair_Auto/app/build.gradle')
+          s = gradle.read_text().replace('versionCode 14','versionCode 15').replace("versionName '14.0'","versionName '15.0'")
+          gradle.write_text(s)
+          manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          if 'rikka.shizuku.ShizukuProvider' not in s:
+              provider = '''        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />\n\n'''
+              s = s.replace('        <service\n', provider + '        <service\n', 1)
+          manifest.write_text(s)
+          main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
+          s = main.read_text()
+          s = s.replace('CODM CROSSHAIR AUTO • v14','CODM CROSSHAIR AUTO • v15')
+          s = s.replace('Shizuku: esperando conexión con el servicio…','SHIZUKU: DESCONECTADO • binder no recibido')
+          s = s.replace('Shizuku: esperando binder • si ya está iniciado, se conectará solo','SHIZUKU: DESCONECTADO')
+          s = s.replace('Shizuku: CONECTADO • lectura FPS habilitada','SHIZUKU: CONECTADO • FPS HABILITADO')
+          s = s.replace('Shizuku: activo • falta autorizar esta APK','SHIZUKU: DESCONECTADO • FALTA PERMISO')
+          s = s.replace('Shizuku: no detectado','SHIZUKU: DESCONECTADO')
+          s = s.replace('Color.rgb(255, 190, 80)','Color.rgb(255, 80, 80)')
+          main.write_text(s)
+          PY
+          base64 -d v16patch.b64 | gzip -d > v16.patch
+          patch -p1 < v16.patch
+          grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
+
+      - name: Add logo and fix FPS cap v18
+        run: |
+          mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
+          base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path('CODMCrosshair_Auto/app/build.gradle')
+          s = gradle.read_text()
+          s = s.replace('versionCode 16', 'versionCode 18')
+          s = s.replace("versionName '16.0'", "versionName '18.0'")
+          gradle.write_text(s)
+
+          manifest = Path('CODMCrosshair_Auto/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          def repl(m):
+              attrs = m.group(1)
+              attrs = re.sub(r'\s+android:(?:icon|roundIcon)="[^"]*"', '', attrs)
+              return '<application' + attrs + '\n        android:icon="@drawable/ic_launcher_crosshair"\n        android:roundIcon="@drawable/ic_launcher_crosshair">'
+          s, n = re.subn(r'<application\b([^>]*)>', repl, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('No se encontró <application>')
+          manifest.write_text(s)
+
+          service = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java')
+          text = service.read_text()
+          old = '''    private int currentRefreshRateCap() {
+        try {
+            Display display = getDisplay();
+            if (display == null && windowManager != null) display = windowManager.getDefaultDisplay();
+            if (display != null) {
+                float hz = display.getMode() != null ? display.getMode().getRefreshRate() : display.getRefreshRate();
+                if (hz >= 30f && hz <= 360f) return Math.max(1, Math.round(hz));
+            }
+        } catch (Throwable ignored) { }
+        return -1;
+    }
+'''
+          new = '''    private int currentRefreshRateCap() {
+        try {
+            Display display = getDisplay();
+            if (display == null && windowManager != null) display = windowManager.getDefaultDisplay();
+            if (display != null) {
+                float hz = display.getMode() != null ? display.getMode().getRefreshRate() : display.getRefreshRate();
+                if (hz >= 30f && hz <= 360f) return normalizeRefreshRateCap(hz);
+            }
+        } catch (Throwable ignored) { }
+        return -1;
+    }
+
+    private int normalizeRefreshRateCap(float hz) {
+        // HyperOS puede reportar valores ligeramente desplazados (p.ej. 124-125 Hz)
+        // aunque el panel esté en modo 120 Hz. Normalizamos a tasas estándar.
+        final int[] standard = {30, 48, 50, 60, 72, 75, 90, 96, 120, 144, 165, 240};
+        int rounded = Math.max(1, Math.round(hz));
+        int nearest = rounded;
+        float best = Float.MAX_VALUE;
+        for (int candidate : standard) {
+            float diff = Math.abs(hz - candidate);
+            if (diff < best) {
+                best = diff;
+                nearest = candidate;
+            }
+        }
+        // Una desviación de hasta 7 Hz se considera ruido/offset del driver.
+        // 125 Hz -> 120 Hz; 119.8 -> 120 Hz; 143.7 -> 144 Hz.
+        return best <= 7.0f ? nearest : rounded;
+    }
+'''
+          if old not in text:
+              raise SystemExit('No se encontró currentRefreshRateCap() esperado')
+          service.write_text(text.replace(old, new, 1))
+
+          main = Path('CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/MainActivity.java')
+          t = main.read_text().replace('CODM CROSSHAIR AUTO • v16', 'CODM CROSSHAIR AUTO • v18')
+          main.write_text(t)
+          PY
+          test -s CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
+          grep -q 'versionCode 18' CODMCrosshair_Auto/app/build.gradle
+          grep -q 'normalizeRefreshRateCap' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+
+      - name: Build v18 APK
+        working-directory: CODMCrosshair_Auto
+        run: gradle assembleDebug --stacktrace
+
+      - name: Verify APK
+        run: |
+          APK=CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-icon"
+          cp "$APK" CODMCrosshair_Auto_v18_FPS120_Logo.apk
+
+      - name: Upload v18 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CODMCrosshair-Auto-v18-FPS120-Logo-APK
+          path: CODMCrosshair_Auto_v18_FPS120_Logo.apk
+          retention-days: 7
