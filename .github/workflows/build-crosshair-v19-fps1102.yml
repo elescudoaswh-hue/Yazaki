@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v20 FPS Exacto
+name: Build CODM Crosshair v21 Accesibilidad Estable
 
 on:
   push:
@@ -6,10 +6,11 @@ on:
     paths:
       - '.github/workflows/build-crosshair-v19-fps1102.yml'
       - 'tools/codm_v20_transform.py'
+      - 'tools/codm_v21_stability.py'
   workflow_dispatch:
 
 jobs:
-  build-v20:
+  build-v21:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,18 +69,18 @@ jobs:
           patch -p1 < v16.patch
           grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
 
-      - name: Apply v20 exact FPS transformer and logo
+      - name: Apply v21 exact FPS plus accessibility stability
         run: |
           mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
           base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
-          python3 tools/codm_v20_transform.py
-          grep -q 'versionCode 20' CODMCrosshair_Auto/app/build.gradle
+          python3 tools/codm_v21_stability.py
+          grep -q 'versionCode 21' CODMCrosshair_Auto/app/build.gradle
           grep -q 'FPS EXACTO • SurfaceView/BLAST CODM' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q 'actualPresentTime' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q 'float stabilizeFps(float rawFps)' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          grep -q 'ACCESIBILIDAD OK • FPS AISLADO' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
+          grep -q 'ensureFpsClient()' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
-      - name: Build v20 APK
+      - name: Build v21 APK
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
@@ -88,13 +89,13 @@ jobs:
           APK=CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk
           unzip -t "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-icon"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -q 'CodmAccessibilityService'
           unzip -l "$APK" | grep -q 'ic_launcher_crosshair.webp'
-          cp "$APK" CODMCrosshair_Auto_v20_FPS_Exacto_BLAST_Logo.apk
+          cp "$APK" CODMCrosshair_Auto_v21_Accesibilidad_Estable_FPS_Exacto.apk
 
-      - name: Upload v20 APK
+      - name: Upload v21 APK
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v20-FPS-Exacto-BLAST-Logo-APK
-          path: CODMCrosshair_Auto_v20_FPS_Exacto_BLAST_Logo.apk
+          name: CODMCrosshair-Auto-v21-Accesibilidad-Estable-FPS-Exacto-APK
+          path: CODMCrosshair_Auto_v21_Accesibilidad_Estable_FPS_Exacto.apk
           retention-days: 7
