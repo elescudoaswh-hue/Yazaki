@@ -48,11 +48,10 @@ overlay_service = '''
         </service>
 
 '''
-# insertar antes del primer tile service
-anchor = '        <service\n            android:name=".CrosshairTileService"'
-if anchor not in m:
-    raise SystemExit('No se encontró anchor tile en manifest')
-m = m.replace(anchor, overlay_service + anchor, 1)
+# Inserta el nuevo servicio al final de <application>; no depende del formato de los tiles.
+if '</application>' not in m:
+    raise SystemExit('No se encontró </application> en manifest')
+m = m.replace('</application>', overlay_service + '    </application>', 1)
 manifest.write_text(m)
 
 # Nuevo servicio independiente de Accesibilidad.
