@@ -1,4 +1,4 @@
-name: Build CODM Crosshair v21 Accesibilidad Estable
+name: Build CODM Crosshair v22 Sin Accesibilidad
 
 on:
   push:
@@ -7,10 +7,11 @@ on:
       - '.github/workflows/build-crosshair-v19-fps1102.yml'
       - 'tools/codm_v20_transform.py'
       - 'tools/codm_v21_stability.py'
+      - 'tools/codm_v22_overlay_service.py'
   workflow_dispatch:
 
 jobs:
-  build-v21:
+  build-v22:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,18 +70,20 @@ jobs:
           patch -p1 < v16.patch
           grep -q "versionCode 16" CODMCrosshair_Auto/app/build.gradle
 
-      - name: Apply v21 exact FPS plus accessibility stability
+      - name: Apply v22 overlay service without accessibility
         run: |
           mkdir -p CODMCrosshair_Auto/app/src/main/res/drawable-nodpi
           base64 -d crosshair_icon_v17.webp.b64 > CODMCrosshair_Auto/app/src/main/res/drawable-nodpi/ic_launcher_crosshair.webp
-          python3 tools/codm_v21_stability.py
-          grep -q 'versionCode 21' CODMCrosshair_Auto/app/build.gradle
+          python3 tools/codm_v22_overlay_service.py
+          grep -q 'versionCode 22' CODMCrosshair_Auto/app/build.gradle
+          grep -q 'GameOverlayService' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+          ! grep -q 'CodmAccessibilityService' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
+          grep -q 'TYPE_APPLICATION_OVERLAY' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/GameOverlayService.java
+          grep -q 'UsageStatsManager' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/GameOverlayService.java
           grep -q 'FPS EXACTO • SurfaceView/BLAST CODM' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/ShizukuFpsClient.java
-          grep -q 'ACCESIBILIDAD OK • FPS AISLADO' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
-          grep -q 'ensureFpsClient()' CODMCrosshair_Auto/app/src/main/java/com/codm/crosshair/CodmAccessibilityService.java
           grep -q 'android:icon="@drawable/ic_launcher_crosshair"' CODMCrosshair_Auto/app/src/main/AndroidManifest.xml
 
-      - name: Build v21 APK
+      - name: Build v22 APK
         working-directory: CODMCrosshair_Auto
         run: gradle assembleDebug --stacktrace
 
@@ -89,13 +92,14 @@ jobs:
           APK=CODMCrosshair_Auto/app/build/outputs/apk/debug/app-debug.apk
           unzip -t "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.codm.crosshair'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -q 'CodmAccessibilityService'
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -q 'GameOverlayService'
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -q 'CodmAccessibilityService'; then exit 1; fi
           unzip -l "$APK" | grep -q 'ic_launcher_crosshair.webp'
-          cp "$APK" CODMCrosshair_Auto_v21_Accesibilidad_Estable_FPS_Exacto.apk
+          cp "$APK" CODMCrosshair_Auto_v22_Sin_Accesibilidad_FPS_Exacto.apk
 
-      - name: Upload v21 APK
+      - name: Upload v22 APK
         uses: actions/upload-artifact@v4
         with:
-          name: CODMCrosshair-Auto-v21-Accesibilidad-Estable-FPS-Exacto-APK
-          path: CODMCrosshair_Auto_v21_Accesibilidad_Estable_FPS_Exacto.apk
+          name: CODMCrosshair-Auto-v22-Sin-Accesibilidad-FPS-Exacto-APK
+          path: CODMCrosshair_Auto_v22_Sin_Accesibilidad_FPS_Exacto.apk
           retention-days: 7
